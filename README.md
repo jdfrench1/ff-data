@@ -47,7 +47,7 @@ This project defines a Postgres-backed pipeline that loads historical and weekly
    set PYTHONPATH=src  # on PowerShell: $env:PYTHONPATH="src"
    uvicorn nfldb.api.main:app --reload --host 0.0.0.0 --port 8000
    ```
-3. The API exposes `/api/seasons` and `/api/games?season=YYYY` and enables CORS for `http://localhost:5173`.
+3. The API is versioned under `/api/v1` and exposes endpoints for seasons, weeks, games, game detail, and team stats while enabling CORS for `http://localhost:5173`.
 ### Run the React client
 1. `cd frontend`
 2. Install once: `npm install`

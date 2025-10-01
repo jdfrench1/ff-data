@@ -9,14 +9,14 @@
 
 ## 1. Data Quality & API Enhancements
 
-- [ ] Filter `/api/seasons` to hide seasons without any finished games (prevents future seasons appearing until stats
+- [x] Filter `/api/seasons` to hide seasons without any finished games (prevents future seasons appearing until stats
 exist).
-- [ ] Add basic error handling / 404s to the FastAPI app and version the routes (e.g., `/api/v1/...`).
-- [ ] Introduce richer read endpoints:
+- [x] Add basic error handling / 404s to the FastAPI app and version the routes (e.g., `/api/v1/...`).
+- [x] Introduce richer read endpoints:
 - `/api/weeks?season=YYYY`
 - `/api/games/{game_id}`
 - `/api/team-stats?season=YYYY`
-- [ ] Create pytest fixtures for cached parquet files and add tests covering:
+- [x] Create pytest fixtures for cached parquet files and add tests covering:
 - Season/week/team insertion logic
 - Game upsert constraints
 - Player/team stat transformations
