@@ -47,11 +47,11 @@
 
 ## 4. Local Ops & Monitoring
 
-- [ ] Add simple data sanity checks:
-  - Script that verifies latest season/week counts and prints summary
-  - Optional: write CSV snapshot of row counts
-- [ ] Maintain a `CHANGELOG.md` / notes file for manual runs (data ranges loaded, issues found).
-- [ ] Consider light-weight visualization (e.g., notebook) for inspecting recent loads.
+- [x] Add simple data sanity checks:
+  - Script that verifies latest season/week counts and prints summary (python -m nfldb.cli sanity-check)
+  - Optional: write CSV snapshot of row counts (--output-csv)
+- [x] Maintain a `CHANGELOG.md` / notes file for manual runs (data ranges loaded, issues found).
+- [x] Consider light-weight visualization (e.g., notebook) for inspecting recent loads.
 
 ## 5. Future Enhancements (Optional)
 
