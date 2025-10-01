@@ -1,5 +1,12 @@
 # Project Plan (Local Workflow)
 
+## 0. Project Audit
+
+- [x] Review repository contents; identify scratch notebooks, legacy scripts, or assets no longer needed.
+- [x] Move anything that should be retained for reference into a `depreciated/` directory (create if missing).
+- [x] Update documentation or ignore rules if the new folder should be excluded from tools/tests.
+
+
 ## 1. Data Quality & API Enhancements
 
 - [ ] Filter `/api/seasons` to hide seasons without any finished games (prevents future seasons appearing until stats
@@ -49,3 +56,4 @@ exist).
 
 - [ ] Extend ETL with rosters/coaches (`import_seasonal_rosters`).
 - [ ] Incorporate snap counts and advanced metrics (EPA/success rate).
+

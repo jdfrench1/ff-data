@@ -32,6 +32,7 @@ This project defines a Postgres-backed pipeline that loads historical and weekly
   - `schema.sql`: canonical Postgres DDL
 - `migrations/`: Alembic migrations (empty scaffold for now)
 - `raw/`: cached datasets (gitignored)
+- `depreciated/`: archived notebooks and exploratory scripts kept for reference
 - `tests/`: pytest test suite (WIP)
 
 ## Data Pipeline
@@ -58,3 +59,4 @@ This project defines a Postgres-backed pipeline that loads historical and weekly
 - Extend ETL with weekly roster/coaching assignments and player identifiers from seasonal rosters.
 - Add data validation tests and fixtures to exercise the ETL without hitting live endpoints.
 - Wire automated runs (GitHub Actions or cron) for backfill and weekly refresh workflows.
+
