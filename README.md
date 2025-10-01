@@ -63,6 +63,12 @@ data using the `nfl_data_py` Python package.
 - Cached source files live under `raw/` (ignored by git). Delete a season/week cache
   or pass `--force-refresh` to rebuild a specific slice.
 
+### Local Ops Checks
+- Run `python -m nfldb.cli sanity-check` after backfills or weekly refreshes to inspect the latest season/week counts.
+- Add `--output-csv logs/snapshots/latest_counts.csv` (or another path) to persist row-count snapshots for auditing.
+- Capture manual refresh context in `CHANGELOG.md` so future runs know what was loaded and why.
+- For visual confirmation, open `notebooks/recent_load_health.ipynb` with `DATABASE_URL` set to your target instance to chart completed games by week.
+
 ### Windows Scheduled Refresh
 
 1. Edit `scripts/update-week.ps1` with the season/week you plan to refresh or pass
