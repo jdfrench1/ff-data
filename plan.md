@@ -9,18 +9,17 @@
 
 ## 1. Data Quality & API Enhancements
 
-- [x] Filter `/api/seasons` to hide seasons without any finished games (prevents future seasons appearing until stats
-exist).
+- [x] Filter `/api/seasons` to hide seasons without any finished games (prevents future seasons appearing until stats exist).
 - [x] Add basic error handling / 404s to the FastAPI app and version the routes (e.g., `/api/v1/...`).
 - [x] Introduce richer read endpoints:
-- `/api/weeks?season=YYYY`
-- `/api/games/{game_id}`
-- `/api/team-stats?season=YYYY`
+  - `/api/weeks?season=YYYY`
+  - `/api/games/{game_id}`
+  - `/api/team-stats?season=YYYY`
 - [x] Create pytest fixtures for cached parquet files and add tests covering:
-- Season/week/team insertion logic
-- Game upsert constraints
-- Player/team stat transformations
-- API responses (FastAPI `TestClient`)
+  - Season/week/team insertion logic
+  - Game upsert constraints
+  - Player/team stat transformations
+  - API responses (FastAPI `TestClient`)
 
 ## 2. Frontend Improvements
 
@@ -34,24 +33,23 @@ exist).
 ## 3. Automation & Tooling (Local + GitHub Actions)
 
 - [x] Configure pytest pythonpath so src package loads during tests.
-- [ ] **GitHub Actions – Continuous Integration**
-- Trigger: `push` / `pull_request`
-- Steps: checkout → setup Python → install deps → run `pytest`
-- Optional: cache `pip` downloads
-- [ ] **GitHub Actions – Frontend Build**
-- Trigger: `push` / PR touching `frontend/`
-- Steps: setup Node → `npm ci` → `npm run build` → upload artifact (optional)
-- [ ] **Local Scheduled Refresh (optional)**
-- PowerShell script that sets `PYTHONPATH` and runs `python -m nfldb.cli update-week`
-- Task Scheduler entry (weekly) pointing to the script
-- Log output to file for quick review
-- [ ] Document how to manually run backfill/update-week, and where cached data lives (`raw/`).
+- [x] **GitHub Actions - Continuous Integration**
+  - Trigger: `push` / `pull_request`
+  - Steps: checkout -> setup Python -> install deps -> run `pytest`
+  - Optional: cache `pip` downloads
+- [x] **GitHub Actions - Frontend Build**
+  - Trigger: `push` / PR touching `frontend/`
+  - Steps: setup Node -> `npm ci` -> `npm run build` -> upload artifact (optional)
+- [x] **Local Scheduled Refresh (optional)**
+  - `scripts/update-week.ps1` sets `PYTHONPATH`, prefers `.venv`, writes logs under `logs/`
+  - Documented Task Scheduler usage for weekly runs
+- [x] Document how to manually run backfill/update-week, and where cached data lives (`raw/`).
 
 ## 4. Local Ops & Monitoring
 
 - [ ] Add simple data sanity checks:
-- Script that verifies latest season/week counts and prints summary
-- Optional: write CSV snapshot of row counts
+  - Script that verifies latest season/week counts and prints summary
+  - Optional: write CSV snapshot of row counts
 - [ ] Maintain a `CHANGELOG.md` / notes file for manual runs (data ranges loaded, issues found).
 - [ ] Consider light-weight visualization (e.g., notebook) for inspecting recent loads.
 
@@ -59,7 +57,3 @@ exist).
 
 - [ ] Extend ETL with rosters/coaches (`import_seasonal_rosters`).
 - [ ] Incorporate snap counts and advanced metrics (EPA/success rate).
-
-
-
-
