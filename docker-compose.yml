@@ -1,0 +1,32 @@
+﻿version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: nfl_user
+      POSTGRES_PASSWORD: nfl_password
+      POSTGRES_DB: nfl_stats
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: nfl_stats
+      POSTGRES_USER: nfl_user
+      POSTGRES_PASSWORD: nfl_password
+    command: python /app/ffscraper.py
+
+volumes:
+  postgres_data:
+    driver: local
