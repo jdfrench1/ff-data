@@ -15,3 +15,8 @@ Adopt `pytest` and store specs in `tests/`, mirroring module names (`tests/test_
 ## Commit & Pull Request Guidelines
 Write commits in the imperative mood (`Add CSV schema validation`) and keep each focused on one concern. Reference related issues in the body when applicable and call out data source changes explicitly. Pull requests need a concise summary, test evidence (`pytest -q` output or compose logs), and screenshots or CSV diffs for schema-impacting updates. Flag Docker or compose changes so reviewers can plan rollout adjustments.
 
+## Working with plan.md
+After each phase of the plan, stop and ask for further instrunction.
+Before each phase of the plan, create a repo branch.
+After each phase of the plan, commit the changes, and merge the branch.
+After each phase of the plan, update the plan.md file.

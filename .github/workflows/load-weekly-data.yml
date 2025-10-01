@@ -1,0 +1,83 @@
+name: Load Weekly NFL Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Season year (e.g., 2024)"
+        required: false
+        default: "2024"
+      week:
+        description: "Week number or 'current'"
+        required: false
+        default: "current"
+  schedule:
+    - cron: '0 10 * * TUE'
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    env:
+      SEASON: ${{ inputs.season }}
+      WEEK: ${{ inputs.week }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run scraper
+        run: |
+          # If ffscraper.py supports args, pass them; otherwise, it will ignore
+          python ffscraper.py
+
+      - name: Upload CSV artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-player-stats
+          path: nfl_player_stats.csv
+
+      - name: Load CSV into Postgres (optional)
+        if: ${{ success() && env.PGHOST && env.PGUSER && env.PGDATABASE }}
+        env:
+          PGHOST: ${{ secrets.PGHOST }}
+          PGPORT: ${{ secrets.PGPORT }}
+          PGUSER: ${{ secrets.PGUSER }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD }}
+          PGDATABASE: ${{ secrets.PGDATABASE }}
+        run: |
+          python - << 'PY'
+          import os, sys
+          import pandas as pd
+          from sqlalchemy import create_engine
+
+          csv_path = 'nfl_player_stats.csv'
+          if not os.path.exists(csv_path):
+              print(f"CSV not found: {csv_path}")
+              sys.exit(1)
+
+          user = os.environ['PGUSER']
+          pwd = os.environ['PGPASSWORD']
+          host = os.environ['PGHOST']
+          port = os.environ.get('PGPORT', '5432')
+          db = os.environ['PGDATABASE']
+
+          url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
+          engine = create_engine(url)
+
+          df = pd.read_csv(csv_path)
+          # Replace 'nfl_player_stats' with your target table if different
+          df.to_sql('nfl_player_stats', engine, if_exists='append', index=False)
+          print('Loaded CSV into Postgres table nfl_player_stats')
+          PY
+
