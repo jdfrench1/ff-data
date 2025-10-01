@@ -34,12 +34,50 @@ body {
   gap: 0.5rem;
 }
 
-select {
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.filters__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 160px;
+}
+
+.filters__group label {
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+select,
+input[type='search'] {
   font-size: 1rem;
   padding: 0.4rem 0.6rem;
   border-radius: 0.5rem;
   border: 1px solid #cbd5f5;
   background-color: #fff;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+input[type='search'] {
+  min-width: 200px;
+}
+
+select:focus,
+input[type='search']:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+select:disabled,
+input[type='search']:disabled {
+  background-color: #e2e8f0;
+  cursor: not-allowed;
 }
 
 .app__status {
@@ -48,11 +86,34 @@ select {
   border-radius: 0.75rem;
   background-color: #e2e8f0;
   color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .app__status--error {
   background-color: #fee2e2;
   color: #991b1b;
+}
+
+.app__status button {
+  background-color: #1d4ed8;
+  color: #ffffff;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.app__status button:disabled {
+  background-color: #93c5fd;
+  cursor: not-allowed;
+}
+
+.app__status button:not(:disabled):hover {
+  background-color: #1e40af;
 }
 
 .week-grid {
@@ -99,6 +160,42 @@ tr:nth-child(even) td {
   background-color: #f8fafc;
 }
 
+.game-row {
+  transition: background-color 0.2s ease;
+}
+
+.game-row--final td {
+  background-color: #f1f5f9;
+}
+
+.game-row__score {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.game-row__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.game-row__badge--final {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.game-row__badge--scheduled {
+  background-color: #e0f2fe;
+  color: #0c4a6e;
+}
+
 @media (max-width: 600px) {
   .app {
     padding: 1rem;
@@ -106,5 +203,13 @@ tr:nth-child(even) td {
 
   .app__header {
     align-items: flex-start;
+  }
+
+  .filters__group {
+    width: 100%;
+  }
+
+  input[type='search'] {
+    min-width: 0;
   }
 }
