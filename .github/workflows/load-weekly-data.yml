@@ -35,17 +35,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
-      - name: Run scraper
+      - name: Run weekly loader (nfl_data_py)
         run: |
-          # If ffscraper.py supports args, pass them; otherwise, it will ignore
-          python ffscraper.py
+          python scripts/load_weekly_data.py --season "${{ inputs.season }}" --week "${{ inputs.week }}" --output nfl_weekly_stats.csv
 
       - name: Upload CSV artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-player-stats
-          path: nfl_player_stats.csv
+          name: nfl-weekly-stats
+          path: nfl_weekly_stats.csv
 
       - name: Load CSV into Postgres (optional)
         if: ${{ success() && env.PGHOST && env.PGUSER && env.PGDATABASE }}
@@ -61,7 +60,7 @@ jobs:
           import pandas as pd
           from sqlalchemy import create_engine
 
-          csv_path = 'nfl_player_stats.csv'
+          csv_path = 'nfl_weekly_stats.csv'
           if not os.path.exists(csv_path):
               print(f"CSV not found: {csv_path}")
               sys.exit(1)
@@ -76,8 +75,7 @@ jobs:
           engine = create_engine(url)
 
           df = pd.read_csv(csv_path)
-          # Replace 'nfl_player_stats' with your target table if different
-          df.to_sql('nfl_player_stats', engine, if_exists='append', index=False)
-          print('Loaded CSV into Postgres table nfl_player_stats')
+          # Replace 'nfl_weekly_stats' with your target table if different
+          df.to_sql('nfl_weekly_stats', engine, if_exists='append', index=False)
+          print('Loaded CSV into Postgres table nfl_weekly_stats')
           PY
-
