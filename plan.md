@@ -33,6 +33,7 @@ exist).
 
 ## 3. Automation & Tooling (Local + GitHub Actions)
 
+- [x] Configure pytest pythonpath so src package loads during tests.
 - [ ] **GitHub Actions – Continuous Integration**
 - Trigger: `push` / `pull_request`
 - Steps: checkout → setup Python → install deps → run `pytest`
@@ -58,6 +59,7 @@ exist).
 
 - [ ] Extend ETL with rosters/coaches (`import_seasonal_rosters`).
 - [ ] Incorporate snap counts and advanced metrics (EPA/success rate).
+
 
 
 
