@@ -27,10 +27,11 @@ async function request<T>(path: string): Promise<T> {
 }
 
 export function fetchSeasons(): Promise<Season[]> {
-  return request<Season[]>('/api/seasons');
+  return request<Season[]>('/api/v1/seasons');
 }
 
 export function fetchGames(season: number): Promise<Game[]> {
   const params = new URLSearchParams({ season: season.toString() });
-  return request<Game[]>(`/api/games?${params.toString()}`);
+  return request<Game[]>(`/api/v1/games?${params.toString()}`);
 }
+

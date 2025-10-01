@@ -28,6 +28,7 @@ exist).
 - [x] Highlight completed vs scheduled games (e.g., "Final" badge when scores exist).
 - [x] Add filters/search (by week, by team, sort by kickoff time).
 - [x] Provide `.env.local.example` documenting `VITE_API_BASE` for custom ports.
+- [x] Update frontend API client to call `/api/v1` endpoints after backend versioning.
 
 ## 3. Automation & Tooling (Local + GitHub Actions)
 
@@ -56,4 +57,5 @@ exist).
 
 - [ ] Extend ETL with rosters/coaches (`import_seasonal_rosters`).
 - [ ] Incorporate snap counts and advanced metrics (EPA/success rate).
+
 
