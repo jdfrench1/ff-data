@@ -6,7 +6,7 @@ import pandas as pd
 import typer
 
 
-def _resolve_weekly_loader() -> Callable[[int], pd.DataFrame]:
+def _resolve_weekly_loader() -> tuple[str, str, Callable[[int], pd.DataFrame]]:
     # Prefer nflreadpy, fallback to nfl_data_py for compatibility
     try:
         import nflreadpy as nfr  # type: ignore
@@ -21,7 +21,7 @@ def _resolve_weekly_loader() -> Callable[[int], pd.DataFrame]:
                         return _func(years=[season])
                     except TypeError:
                         return _func(season)
-                return _load
+                return ("nflreadpy", name, _load)
         raise ImportError("nflreadpy found but no weekly import function detected")
     except Exception:
         pass
@@ -32,14 +32,14 @@ def _resolve_weekly_loader() -> Callable[[int], pd.DataFrame]:
         def _load(season: int):
             return ndp.import_weekly_data(years=[season])
 
-        return _load
+        return ("nfl_data_py", "import_weekly_data", _load)
     except Exception as exc:
         raise RuntimeError(
             "No data provider available. Install nflreadpy or nfl_data_py."
         ) from exc
 
 
-def _resolve_schedule_loader() -> Callable[[int], pd.DataFrame]:
+def _resolve_schedule_loader() -> tuple[str, str, Callable[[int], pd.DataFrame]]:
     # Prefer nflreadpy, fallback to nfl_data_py
     try:
         import nflreadpy as nfr  # type: ignore
@@ -52,7 +52,7 @@ def _resolve_schedule_loader() -> Callable[[int], pd.DataFrame]:
                         return _func(years=[season])
                     except TypeError:
                         return _func(season)
-                return _load
+                return ("nflreadpy", name, _load)
         raise ImportError("nflreadpy found but no schedule import function detected")
     except Exception:
         pass
@@ -63,19 +63,24 @@ def _resolve_schedule_loader() -> Callable[[int], pd.DataFrame]:
         def _load(season: int):
             return ndp.import_schedules([season])
 
-        return _load
+        return ("nfl_data_py", "import_schedules", _load)
     except Exception as exc:
         raise RuntimeError(
             "No schedule provider available. Install nflreadpy or nfl_data_py."
         ) from exc
 
 
-def load_weekly(season: int, week: Optional[int] = None) -> pd.DataFrame:
-    load = _resolve_weekly_loader()
+def load_weekly(season: int, week: Optional[int] = None, verbose: bool = False) -> pd.DataFrame:
+    provider, func_name, load = _resolve_weekly_loader()
     df = load(season)
+    if verbose:
+        print(f"Provider={provider} func={func_name} rows={len(df)} cols={list(df.columns)[:8]}...")
     # Ensure expected basic columns exist; nfl_data_py schema may evolve
-    if week is not None:
-        df = df[df["week"] == week]
+    # Normalize week to numeric for robust filtering
+    if "week" in df.columns:
+        df["week"] = pd.to_numeric(df["week"], errors="coerce")
+    if week is not None and "week" in df.columns:
+        df = df[df["week"] == int(week)]
     # Normalize column names (lower_snake)
     df.columns = [str(c).strip().replace(" ", "_").lower() for c in df.columns]
     return df.reset_index(drop=True)
@@ -83,16 +88,14 @@ def load_weekly(season: int, week: Optional[int] = None) -> pd.DataFrame:
 
 def describe_availability(season: int) -> str:
     try:
-        load_sched = _resolve_schedule_loader()
+        provider, func_name, load_sched = _resolve_schedule_loader()
         sched = load_sched(season)
         if sched is None or len(sched) == 0:
             return f"No schedule available for season {season}."
         weeks = sorted(set(sched["week"].dropna().astype(int)))
         min_w, max_w = (min(weeks), max(weeks)) if weeks else (None, None)
-        return (
-            f"Season {season} schedule weeks: {weeks if weeks else 'unknown'}. "
-            + (f"Min={min_w} Max={max_w}" if weeks else "")
-        )
+        return (f"Season {season} schedule weeks: {weeks if weeks else 'unknown'}; "
+                f"min={min_w} max={max_w}; provider={provider}.{func_name}")
     except Exception as _:
         return f"Could not determine schedule for season {season}."
 
@@ -104,6 +107,7 @@ def main(
     allow_empty: bool = typer.Option(
         False, help="Allow empty result without failing (writes empty CSV)"
     ),
+    verbose: bool = typer.Option(False, help="Print provider and basic diagnostics"),
 ):
     # Fallback to environment if CLI not provided
     if season is None:
@@ -127,7 +131,7 @@ def main(
                 week = None
 
     try:
-        df = load_weekly(season, week)
+        df = load_weekly(season, week, verbose=verbose)
     except Exception as exc:
         hint = describe_availability(season)
         msg = (

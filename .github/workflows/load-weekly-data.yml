@@ -11,6 +11,11 @@ on:
         description: "Week number (leave blank for all)"
         required: false
         default: ""
+      allow_empty:
+        description: "Succeed with empty CSV if data not yet published"
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: '0 10 * * TUE'
 
@@ -45,6 +50,10 @@ jobs:
           ARGS=( )
           if [ -n "${{ inputs.season }}" ]; then ARGS+=(--season "${{ inputs.season }}"); fi
           if [ -n "${{ inputs.week }}" ]; then ARGS+=(--week "${{ inputs.week }}"); fi
+          # Auto-allow empty results on scheduled runs, or if user requested it
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.allow_empty }}" = "true" ]; then
+            ARGS+=(--allow-empty)
+          fi
           python scripts/load_weekly_data.py "${ARGS[@]}" --output nfl_weekly_stats.csv
 
       - name: Upload CSV artifact
