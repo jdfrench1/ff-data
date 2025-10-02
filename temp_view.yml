@@ -1,4 +1,4 @@
-name: Load Weekly NFL Data
+﻿name: Load Weekly NFL Data
 
 on:
   workflow_dispatch:
@@ -17,13 +17,6 @@ on:
 jobs:
   load:
     runs-on: ubuntu-latest
-    env:
-      # Expose DB secrets as env so we can reference them in `if:` expressions
-      PGHOST: ${{ secrets.PGHOST }}
-      PGPORT: ${{ secrets.PGPORT }}
-      PGUSER: ${{ secrets.PGUSER }}
-      PGPASSWORD: ${{ secrets.PGPASSWORD }}
-      PGDATABASE: ${{ secrets.PGDATABASE }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -55,7 +48,13 @@ jobs:
           path: nfl_weekly_stats.csv
 
       - name: Load CSV into Postgres (optional)
-        if: ${{ success() && env.PGHOST && env.PGUSER && env.PGDATABASE }}
+        if: ${{ success() && secrets.PGHOST && secrets.PGUSER && secrets.PGDATABASE }}
+        env:
+          PGHOST: ${{ secrets.PGHOST }}
+          PGPORT: ${{ secrets.PGPORT }}
+          PGUSER: ${{ secrets.PGUSER }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD }}
+          PGDATABASE: ${{ secrets.PGDATABASE }}
         run: |
           python - << 'PY'
           import os, sys
