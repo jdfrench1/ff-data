@@ -1,0 +1,11 @@
+﻿{
+  "agentId": 21,
+  "agentName": "OPTIMUSPRIME",
+  "poolId": 1,
+  "poolName": "Default",
+  "serverUrl": "https://pipelinesghubeus12.actions.githubusercontent.com/oS8w0m5igHLjo2NhcHkiNAGqrK0D9oP6BOLe7qx1Hbn0A1clql/",
+  "gitHubUrl": "https://github.com/jdfrench1/ff-data",
+  "workFolder": "_work",
+  "useV2Flow": true,
+  "serverUrlV2": "https://broker.actions.githubusercontent.com/"
+}
