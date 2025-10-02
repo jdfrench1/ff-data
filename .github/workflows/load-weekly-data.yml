@@ -49,17 +49,21 @@ jobs:
         shell: pwsh
         run: |
           python -V
-          $script = @'
-import importlib
-for mod in ("nflreadpy", "nfl_data_py"):
-    try:
-        m = importlib.import_module(mod)
-        ver = getattr(m, "__version__", "(no __version__)")
-        print(f"{mod} version: {ver}")
-    except Exception as exc:
-        print(f"{mod} not importable: {exc}")
-'@
-          $script | python -
+          $scriptLines = @(
+            "import importlib",
+            "",
+            "for mod in ('nflreadpy', 'nfl_data_py'):",
+            "    try:",
+            "        m = importlib.import_module(mod)",
+            "        ver = getattr(m, '__version__', '(no __version__)')",
+            "        print(f'{mod} version: {ver}')",
+            "    except Exception as exc:",
+            "        print(f'{mod} not importable: {exc}')"
+          )
+          $temp = New-TemporaryFile
+          Set-Content -Path $temp -Value $scriptLines
+          python $temp
+          Remove-Item $temp
 
       - name: Run weekly loader
         shell: pwsh
@@ -82,34 +86,37 @@ for mod in ("nflreadpy", "nfl_data_py"):
         if: ${{ success() && env.PGHOST && env.PGUSER && env.PGDATABASE }}
         shell: pwsh
         run: |
-          $script = @'
-import os
-import sys
-import pandas as pd
-from sqlalchemy import create_engine
-
-csv_path = "nfl_weekly_stats.csv"
-if not os.path.exists(csv_path):
-    print(f"CSV not found: {csv_path}")
-    sys.exit(1)
-
-user = os.environ["PGUSER"]
-pwd = os.environ["PGPASSWORD"]
-host = os.environ["PGHOST"]
-port = os.environ.get("PGPORT", "5432")
-db = os.environ["PGDATABASE"]
-
-try:
-    import psycopg  # noqa: F401
-    driver = "psycopg"
-except ImportError:
-    driver = "psycopg2"
-
-url = f"postgresql+{driver}://{user}:{pwd}@{host}:{port}/{db}"
-engine = create_engine(url)
-
-df = pd.read_csv(csv_path)
-df.to_sql('nfl_weekly_stats', engine, if_exists='append', index=False)
-print('Loaded CSV into Postgres table nfl_weekly_stats')
-'@
-          $script | python -
+          $scriptLines = @(
+            "import os",
+            "import sys",
+            "import pandas as pd",
+            "from sqlalchemy import create_engine",
+            "",
+            "csv_path = 'nfl_weekly_stats.csv'",
+            "if not os.path.exists(csv_path):",
+            "    print(f'CSV not found: {csv_path}')",
+            "    sys.exit(1)",
+            "",
+            "user = os.environ['PGUSER']",
+            "pwd = os.environ['PGPASSWORD']",
+            "host = os.environ['PGHOST']",
+            "port = os.environ.get('PGPORT', '5432')",
+            "db = os.environ['PGDATABASE']",
+            "",
+            "try:",
+            "    import psycopg  # noqa: F401",
+            "    driver = 'psycopg'",
+            "except ImportError:",
+            "    driver = 'psycopg2'",
+            "",
+            "url = f'postgresql+{driver}://{user}:{pwd}@{host}:{port}/{db}'",
+            "engine = create_engine(url)",
+            "",
+            "df = pd.read_csv(csv_path)",
+            "df.to_sql('nfl_weekly_stats', engine, if_exists='append', index=False)",
+            "print('Loaded CSV into Postgres table nfl_weekly_stats')"
+          )
+          $temp = New-TemporaryFile
+          Set-Content -Path $temp -Value $scriptLines
+          python $temp
+          Remove-Item $temp
