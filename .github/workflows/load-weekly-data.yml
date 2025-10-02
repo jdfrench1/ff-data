@@ -97,7 +97,14 @@ jobs:
           port = os.environ.get('PGPORT', '5432')
           db = os.environ['PGDATABASE']
 
-          url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
+          # Use psycopg (v3) driver; falls back to psycopg2 if needed
+          try:
+              import psycopg  # noqa: F401
+              driver = "psycopg"
+          except ImportError:
+              driver = "psycopg2"
+
+          url = f"postgresql+{driver}://{user}:{pwd}@{host}:{port}/{db}"
           engine = create_engine(url)
 
           df = pd.read_csv(csv_path)
