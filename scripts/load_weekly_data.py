@@ -6,7 +6,7 @@ import pandas as pd
 import typer
 
 
-def _resolve_weekly_loader() -> tuple[str, str, Callable[[int], pd.DataFrame]]:
+def _resolve_weekly_loader(prefer: Optional[str] = None) -> tuple[str, str, Callable[[int], pd.DataFrame]]:
     # Prefer nflreadpy, fallback to nfl_data_py for compatibility
     try:
         import nflreadpy as nfr  # type: ignore
@@ -39,7 +39,7 @@ def _resolve_weekly_loader() -> tuple[str, str, Callable[[int], pd.DataFrame]]:
         ) from exc
 
 
-def _resolve_schedule_loader() -> tuple[str, str, Callable[[int], pd.DataFrame]]:
+def _resolve_schedule_loader(prefer: Optional[str] = None) -> tuple[str, str, Callable[[int], pd.DataFrame]]:
     # Prefer nflreadpy, fallback to nfl_data_py
     try:
         import nflreadpy as nfr  # type: ignore
@@ -70,8 +70,8 @@ def _resolve_schedule_loader() -> tuple[str, str, Callable[[int], pd.DataFrame]]
         ) from exc
 
 
-def load_weekly(season: int, week: Optional[int] = None, verbose: bool = False) -> pd.DataFrame:
-    provider, func_name, load = _resolve_weekly_loader()
+def load_weekly(season: int, week: Optional[int] = None, verbose: bool = False, provider_hint: Optional[str] = None) -> pd.DataFrame:
+    provider, func_name, load = _resolve_weekly_loader(prefer=provider_hint)
     df = load(season)
     if verbose:
         print(f"Provider={provider} func={func_name} rows={len(df)} cols={list(df.columns)[:8]}...")
@@ -86,9 +86,9 @@ def load_weekly(season: int, week: Optional[int] = None, verbose: bool = False) 
     return df.reset_index(drop=True)
 
 
-def describe_availability(season: int) -> str:
+def describe_availability(season: int, provider_hint: Optional[str] = None) -> str:
     try:
-        provider, func_name, load_sched = _resolve_schedule_loader()
+        provider, func_name, load_sched = _resolve_schedule_loader(prefer=provider_hint)
         sched = load_sched(season)
         if sched is None or len(sched) == 0:
             return f"No schedule available for season {season}."
@@ -108,6 +108,10 @@ def main(
         False, help="Allow empty result without failing (writes empty CSV)"
     ),
     verbose: bool = typer.Option(False, help="Print provider and basic diagnostics"),
+    provider: Optional[str] = typer.Option(
+        None,
+        help="Force provider: 'nflreadpy' or 'nfl_data_py' (auto-detect if omitted)",
+    ),
 ):
     # Fallback to environment if CLI not provided
     if season is None:
@@ -131,9 +135,9 @@ def main(
                 week = None
 
     try:
-        df = load_weekly(season, week, verbose=verbose)
+        df = load_weekly(season, week, verbose=verbose, provider_hint=provider)
     except Exception as exc:
-        hint = describe_availability(season)
+        hint = describe_availability(season, provider_hint=provider)
         msg = (
             f"Failed to load weekly data for season={season} week="
             f"{week if week is not None else 'all'}: {exc}. {hint}"

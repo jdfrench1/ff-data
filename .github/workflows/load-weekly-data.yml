@@ -54,6 +54,8 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.allow_empty }}" = "true" ]; then
             ARGS+=(--allow-empty)
           fi
+          # Prefer nflreadpy explicitly and enable verbose logging
+          ARGS+=(--provider nflreadpy --verbose)
           python scripts/load_weekly_data.py "${ARGS[@]}" --output nfl_weekly_stats.csv
 
       - name: Upload CSV artifact
