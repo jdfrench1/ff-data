@@ -1,146 +1,208 @@
+import io
 import os
 import sys
-from typing import Optional, Callable
+from datetime import datetime
+from typing import Optional
 
 import pandas as pd
+import requests
 import typer
 
+try:  # Prefer nflreadpy to access current-season stats
+    import nflreadpy as nfr
+except ImportError:  # pragma: no cover
+    nfr = None  # type: ignore
 
-def _resolve_weekly_loader(prefer: Optional[str] = None) -> tuple[str, str, Callable[[int], pd.DataFrame]]:
-    # Prefer nflreadpy, fallback to nfl_data_py for compatibility
+try:
+    import nfl_data_py as ndp
+except ImportError:  # pragma: no cover
+    ndp = None  # type: ignore
+
+
+PLAYER_STATS_RELEASE = (
+    "https://github.com/nflverse/nflverse-data/releases/download/player_stats/"
+    "player_stats_{suffix}.parquet"
+)
+
+
+def _download_parquet(url: str, timeout: int = 60) -> pd.DataFrame:
+    response = requests.get(url, timeout=timeout)
+    response.raise_for_status()
+    return pd.read_parquet(io.BytesIO(response.content))
+
+
+def _load_weekly_nflreadpy(season: int, verbose: bool = False) -> tuple[Optional[pd.DataFrame], Optional[str]]:
+    if nfr is None:
+        return None, "nflreadpy not installed"
     try:
-        import nflreadpy as nfr  # type: ignore
+        # nflreadpy returns a Polars DataFrame
+        stats = nfr.load_player_stats(seasons=season, summary_level="week")
+        df = stats.to_pandas()
+        if verbose:
+            print(
+                "nflreadpy.load_player_stats returned",
+                f"{len(df)} rows for season {season} with columns: {list(df.columns)[:6]}...",
+            )
+        return df, None
+    except Exception as exc:  # pragma: no cover - handled gracefully
+        return None, f"nflreadpy.load_player_stats: {exc}"
 
-        # Try common function names across versions
-        for name in ("import_weekly", "import_weekly_data", "load_weekly", "weekly"):
-            func = getattr(nfr, name, None)
-            if callable(func):
-                def _load(season: int, _func=func):
-                    # Many variants accept years=[...]
-                    try:
-                        return _func(years=[season])
-                    except TypeError:
-                        return _func(season)
-                return ("nflreadpy", name, _load)
-        raise ImportError("nflreadpy found but no weekly import function detected")
-    except Exception:
-        pass
 
+def _load_weekly_nfl_data_py(season: int, verbose: bool = False) -> tuple[Optional[pd.DataFrame], Optional[str]]:
+    if ndp is None:
+        return None, "nfl_data_py not installed"
     try:
-        import nfl_data_py as ndp  # type: ignore
-
-        def _load(season: int):
-            return ndp.import_weekly_data(years=[season])
-
-        return ("nfl_data_py", "import_weekly_data", _load)
+        df = ndp.import_weekly_data(years=[season], downcast=False)
+        if verbose:
+            print(
+                "nfl_data_py.import_weekly_data returned",
+                f"{len(df)} rows with columns: {list(df.columns)[:6]}...",
+            )
+        return df, None
     except Exception as exc:
-        raise RuntimeError(
-            "No data provider available. Install nflreadpy or nfl_data_py."
-        ) from exc
+        return None, f"nfl_data_py.import_weekly_data: {exc}"
 
 
-def _resolve_schedule_loader(prefer: Optional[str] = None) -> tuple[str, str, Callable[[int], pd.DataFrame]]:
-    # Prefer nflreadpy, fallback to nfl_data_py
-    try:
-        import nflreadpy as nfr  # type: ignore
+def _load_weekly_from_release(season: int, verbose: bool = False) -> tuple[Optional[pd.DataFrame], Optional[str]]:
+    suffixes = [str(season)]
+    current_year = datetime.utcnow().year
+    if season >= current_year:
+        suffixes.append("current")
+    errors: list[str] = []
 
-        for name in ("import_schedules", "load_schedules", "schedules"):
-            func = getattr(nfr, name, None)
-            if callable(func):
-                def _load(season: int, _func=func):
-                    try:
-                        return _func(years=[season])
-                    except TypeError:
-                        return _func(season)
-                return ("nflreadpy", name, _load)
-        raise ImportError("nflreadpy found but no schedule import function detected")
-    except Exception:
-        pass
+    for suffix in suffixes:
+        url = PLAYER_STATS_RELEASE.format(suffix=suffix)
+        try:
+            df = _download_parquet(url)
+            if verbose:
+                print(f"Loaded {len(df)} rows from {url}")
+            return df, None
+        except Exception as exc:
+            errors.append(f"{suffix}: {exc}")
 
-    try:
-        import nfl_data_py as ndp  # type: ignore
-
-        def _load(season: int):
-            return ndp.import_schedules([season])
-
-        return ("nfl_data_py", "import_schedules", _load)
-    except Exception as exc:
-        raise RuntimeError(
-            "No schedule provider available. Install nflreadpy or nfl_data_py."
-        ) from exc
+    return None, "release fallback failed: " + "; ".join(errors)
 
 
-def load_weekly(season: int, week: Optional[int] = None, verbose: bool = False, provider_hint: Optional[str] = None) -> pd.DataFrame:
-    provider, func_name, load = _resolve_weekly_loader(prefer=provider_hint)
-    df = load(season)
-    if verbose:
-        print(f"Provider={provider} func={func_name} rows={len(df)} cols={list(df.columns)[:8]}...")
-    # Ensure expected basic columns exist; nfl_data_py schema may evolve
-    # Normalize week to numeric for robust filtering
+def load_weekly(season: int, week: Optional[int], verbose: bool = False) -> pd.DataFrame:
+    errors: list[str] = []
+
+    df, err = _load_weekly_nflreadpy(season, verbose=verbose)
+    if df is None and err:
+        errors.append(err)
+
+    if df is None:
+        df, err = _load_weekly_nfl_data_py(season, verbose=verbose)
+        if df is None and err:
+            errors.append(err)
+
+    if df is None:
+        df, err = _load_weekly_from_release(season, verbose=verbose)
+        if df is None and err:
+            errors.append(err)
+
+    if df is None:
+        raise RuntimeError("No weekly data sources succeeded. " + "; ".join(errors))
+
     if "week" in df.columns:
         df["week"] = pd.to_numeric(df["week"], errors="coerce")
     if week is not None and "week" in df.columns:
         df = df[df["week"] == int(week)]
-    # Normalize column names (lower_snake)
+
     df.columns = [str(c).strip().replace(" ", "_").lower() for c in df.columns]
-    return df.reset_index(drop=True)
+    df = df.reset_index(drop=True)
+
+    if verbose and errors:
+        print("Warnings:", errors)
+
+    return df
 
 
-def describe_availability(season: int, provider_hint: Optional[str] = None) -> str:
-    try:
-        provider, func_name, load_sched = _resolve_schedule_loader(prefer=provider_hint)
-        sched = load_sched(season)
-        if sched is None or len(sched) == 0:
-            return f"No schedule available for season {season}."
-        weeks = sorted(set(sched["week"].dropna().astype(int)))
-        min_w, max_w = (min(weeks), max(weeks)) if weeks else (None, None)
-        return (f"Season {season} schedule weeks: {weeks if weeks else 'unknown'}; "
-                f"min={min_w} max={max_w}; provider={provider}.{func_name}")
-    except Exception as _:
-        return f"Could not determine schedule for season {season}."
+def describe_availability(season: int) -> str:
+    if nfr is not None:
+        try:
+            sched = nfr.load_schedules(seasons=season)
+            schedule_df = sched.to_pandas()
+            weeks = sorted(
+                set(pd.to_numeric(schedule_df["week"], errors="coerce").dropna().astype(int))
+            )
+            return (
+                "Schedule via nflreadpy weeks="
+                f"{weeks}; min={min(weeks)}; max={max(weeks)}"
+            )
+        except Exception as exc:
+            return f"nflreadpy.load_schedules failed: {exc}"
+    if ndp is not None:
+        try:
+            schedule = ndp.import_schedules([season])
+            if schedule.empty:
+                return f"Schedule empty for season {season}"
+            weeks = sorted(
+                set(pd.to_numeric(schedule["week"], errors="coerce").dropna().astype(int))
+            )
+            return (
+                "Schedule via nfl_data_py weeks="
+                f"{weeks}; min={min(weeks)}; max={max(weeks)}"
+            )
+        except Exception as exc:
+            return f"nfl_data_py.import_schedules failed: {exc}"
+    return "No schedule providers available"
+
+
+def parse_season(option: Optional[int]) -> int:
+    if option is not None:
+        return option
+    env = os.getenv("SEASON") or os.getenv("season")
+    if env:
+        if env.lower() == "current":
+            return datetime.utcnow().year
+        try:
+            return int(env)
+        except ValueError:
+            raise typer.BadParameter(f"Invalid SEASON env value: {env}")
+    return datetime.utcnow().year
+
+
+def parse_week(option: Optional[int]) -> Optional[int]:
+    if option is not None:
+        return option
+    env = os.getenv("WEEK") or os.getenv("week")
+    if env:
+        if env.lower() in {"", "all", "current"}:
+            return None
+        try:
+            return int(env)
+        except ValueError:
+            raise typer.BadParameter(f"Invalid WEEK env value: {env}")
+    return None
 
 
 def main(
-    season: Optional[int] = typer.Option(None, help="Season year, e.g., 2024"),
-    week: Optional[int] = typer.Option(None, help="Week number (1-22) or omitted for all"),
+    season: Optional[int] = typer.Option(
+        None, help="Season year (e.g., 2025 or 'current' via env variable)"
+    ),
+    week: Optional[int] = typer.Option(
+        None, help="Week number (leave blank for all weeks)"
+    ),
     output: str = typer.Option("nfl_weekly_stats.csv", help="Output CSV path"),
     allow_empty: bool = typer.Option(
         False, help="Allow empty result without failing (writes empty CSV)"
     ),
-    verbose: bool = typer.Option(False, help="Print provider and basic diagnostics"),
-    provider: Optional[str] = typer.Option(
-        None,
-        help="Force provider: 'nflreadpy' or 'nfl_data_py' (auto-detect if omitted)",
-    ),
+    verbose: bool = typer.Option(False, help="Enable verbose diagnostics"),
 ):
-    # Fallback to environment if CLI not provided
-    if season is None:
-        env = os.getenv("SEASON") or os.getenv("season")
-        if env:
-            try:
-                season = int(env)
-            except ValueError:
-                print(f"Invalid SEASON value: {env}", file=sys.stderr)
-                raise typer.Exit(code=2)
-    if season is None:
-        season = 2024
-
-    if week is None:
-        envw = os.getenv("WEEK") or os.getenv("week")
-        if envw and str(envw).lower() not in {"", "current", "all"}:
-            try:
-                week = int(envw)
-            except ValueError:
-                print(f"Ignoring invalid WEEK value: {envw}", file=sys.stderr)
-                week = None
+    try:
+        resolved_season = parse_season(season)
+        resolved_week = parse_week(week)
+    except typer.BadParameter as exc:
+        print(str(exc), file=sys.stderr)
+        raise typer.Exit(code=2)
 
     try:
-        df = load_weekly(season, week, verbose=verbose, provider_hint=provider)
+        df = load_weekly(resolved_season, resolved_week, verbose=verbose)
     except Exception as exc:
-        hint = describe_availability(season, provider_hint=provider)
+        hint = describe_availability(resolved_season)
         msg = (
-            f"Failed to load weekly data for season={season} week="
-            f"{week if week is not None else 'all'}: {exc}. {hint}"
+            f"Failed to load weekly data for season={resolved_season} "
+            f"week={resolved_week if resolved_week is not None else 'all'}: {exc}. {hint}"
         )
         if allow_empty:
             pd.DataFrame().to_csv(output, index=False)
@@ -151,7 +213,8 @@ def main(
 
     df.to_csv(output, index=False)
     print(
-        f"Wrote {len(df)} rows to {output} for season={season} week={week if week is not None else 'all'}"
+        f"Wrote {len(df)} rows to {output} for season={resolved_season} "
+        f"week={resolved_week if resolved_week is not None else 'all'}"
     )
 
 
