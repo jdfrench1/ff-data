@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s - %(message)s"
 
+MAX_QUERY_PARAMS = 65535
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -129,6 +131,23 @@ def choose_driver() -> str:
             ) from exc
 
 
+def resolve_chunk_size(requested: int, column_count: int) -> int:
+    if requested <= 0:
+        raise ValueError("chunk size must be a positive integer")
+    if column_count <= 0:
+        return requested
+    max_rows = max(1, MAX_QUERY_PARAMS // column_count)
+    effective = min(requested, max_rows)
+    if effective < requested:
+        logger.warning(
+            "Reducing chunk size from %s to %s to stay under Postgres parameter limit (%s)",
+            requested,
+            effective,
+            MAX_QUERY_PARAMS,
+        )
+    return effective
+
+
 def make_engine(
     user: str,
     password: str,
@@ -176,6 +195,15 @@ def main() -> int:
             logger.warning("CSV contains no rows; skipping upload")
             return 0
 
+        column_count = len(df.columns)
+        try:
+            chunk_size = resolve_chunk_size(args.chunk_size, column_count)
+        except ValueError as exc:
+            logger.error(str(exc))
+            return 1
+
+        logger.debug("Using chunk size %s for %s columns", chunk_size, column_count)
+
         logger.info(
             "Uploading %s rows from %s to table %s",
             len(df),
@@ -188,7 +216,7 @@ def main() -> int:
             if_exists=args.if_exists,
             index=False,
             method="multi",
-            chunksize=args.chunk_size,
+            chunksize=chunk_size,
         )
     except Exception:
         logger.exception("Weekly Postgres upload failed")
