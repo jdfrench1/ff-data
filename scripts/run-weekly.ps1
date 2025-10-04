@@ -6,8 +6,7 @@ param(
     [Parameter()][string]$EnvFile,
     [Parameter()][string]$LogFile,
     [switch]$AllowEmpty,
-    [switch]$SkipPostgres,
-    [switch]$Verbose
+    [switch]$SkipPostgres
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,6 +15,7 @@ $repoRoot = Split-Path -Path $scriptDir -Parent
 Push-Location $repoRoot
 
 try {
+    $verboseRequested = $PSBoundParameters.ContainsKey('Verbose') -or $VerbosePreference -eq 'Continue'
     if ($LogFile) {
         $logDirectory = Split-Path -Path $LogFile -Parent
         if ($logDirectory -and -not (Test-Path $logDirectory)) {
@@ -35,11 +35,14 @@ try {
     if ($AllowEmpty.IsPresent) {
         $loaderArgs += '--allow-empty'
     }
-    if ($Verbose.IsPresent) {
+    if ($verboseRequested) {
         $loaderArgs += '--verbose'
     }
     if ($LogFile) {
-        $loaderArgs += @('--log-file', $LogFile, '--quiet')
+        $loaderArgs += @('--log-file', $LogFile)
+        if (-not $verboseRequested) {
+            $loaderArgs += '--quiet'
+        }
     }
 
     & $pythonPath @loaderArgs
@@ -55,9 +58,12 @@ try {
                 $uploadArgs += @('--env-file', $EnvFile)
             }
             if ($LogFile) {
-                $uploadArgs += @('--log-file', $LogFile, '--quiet')
+                $uploadArgs += @('--log-file', $LogFile)
+                if (-not $verboseRequested) {
+                    $uploadArgs += '--quiet'
+                }
             }
-            if ($Verbose.IsPresent) {
+            if ($verboseRequested) {
                 $uploadArgs += @('--log-level', 'DEBUG')
             }
             & $pythonPath $uploadScript @uploadArgs

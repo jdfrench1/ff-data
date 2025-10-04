@@ -72,3 +72,4 @@
 - [x] Document scheduler usage to leverage new logging options.
 
 
+- [x] Resolve PowerShell verbose parameter conflict in run-weekly scheduler script.
