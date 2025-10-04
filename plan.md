@@ -65,3 +65,9 @@
 - [x] Stop tracking `nfl_weekly_stats.csv`; treat it as a generated artifact (move under `raw/` or ignore).
 - [x] Purge cached state directories (`.pytest_cache`, `src/nfldb/__pycache__`, `tests/__pycache__`) and add ignores to prevent reappearance.
 - [x] Verify pytest suite passes after cleanup (2025-10-02).
+
+## 7. Logging Improvements (2025-10-04)
+
+- [x] Introduce logging configuration for weekly loader and uploader scripts (quiet console + optional file handlers).
+- [ ] Document scheduler usage to leverage new logging options.
+

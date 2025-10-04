@@ -1,4 +1,5 @@
-import io
+﻿import io
+import logging
 import os
 import sys
 from datetime import datetime
@@ -18,11 +19,37 @@ try:
 except ImportError:  # pragma: no cover
     ndp = None  # type: ignore
 
-
 PLAYER_STATS_RELEASE = (
     "https://github.com/nflverse/nflverse-data/releases/download/player_stats/"
     "player_stats_{suffix}.parquet"
 )
+
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s - %(message)s"
+
+logger = logging.getLogger(__name__)
+
+VALID_LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+
+
+def configure_logging(log_level: str, log_file: Optional[str], quiet: bool) -> None:
+    level = getattr(logging, log_level.upper(), logging.INFO)
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.setLevel(level)
+
+    formatter = logging.Formatter(LOG_FORMAT)
+
+    console_handler = logging.StreamHandler()
+    console_level = logging.WARNING if quiet else level
+    console_handler.setLevel(console_level)
+    console_handler.setFormatter(formatter)
+    root.addHandler(console_handler)
+
+    if log_file:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        root.addHandler(file_handler)
 
 
 def _download_parquet(url: str, timeout: int = 60) -> pd.DataFrame:
@@ -31,39 +58,49 @@ def _download_parquet(url: str, timeout: int = 60) -> pd.DataFrame:
     return pd.read_parquet(io.BytesIO(response.content))
 
 
-def _load_weekly_nflreadpy(season: int, verbose: bool = False) -> tuple[Optional[pd.DataFrame], Optional[str]]:
+def _load_weekly_nflreadpy(
+    season: int,
+    verbose: bool = False,
+) -> tuple[Optional[pd.DataFrame], Optional[str]]:
     if nfr is None:
         return None, "nflreadpy not installed"
     try:
-        # nflreadpy returns a Polars DataFrame
         stats = nfr.load_player_stats(seasons=season, summary_level="week")
         df = stats.to_pandas()
         if verbose:
-            print(
-                "nflreadpy.load_player_stats returned",
-                f"{len(df)} rows for season {season} with columns: {list(df.columns)[:6]}...",
+            logger.debug(
+                "nflreadpy.load_player_stats returned %s rows for season %s",
+                len(df),
+                season,
             )
         return df, None
     except Exception as exc:  # pragma: no cover - handled gracefully
         return None, f"nflreadpy.load_player_stats: {exc}"
 
 
-def _load_weekly_nfl_data_py(season: int, verbose: bool = False) -> tuple[Optional[pd.DataFrame], Optional[str]]:
+def _load_weekly_nfl_data_py(
+    season: int,
+    verbose: bool = False,
+) -> tuple[Optional[pd.DataFrame], Optional[str]]:
     if ndp is None:
         return None, "nfl_data_py not installed"
     try:
         df = ndp.import_weekly_data(years=[season], downcast=False)
         if verbose:
-            print(
-                "nfl_data_py.import_weekly_data returned",
-                f"{len(df)} rows with columns: {list(df.columns)[:6]}...",
+            logger.debug(
+                "nfl_data_py.import_weekly_data returned %s rows for season %s",
+                len(df),
+                season,
             )
         return df, None
     except Exception as exc:
         return None, f"nfl_data_py.import_weekly_data: {exc}"
 
 
-def _load_weekly_from_release(season: int, verbose: bool = False) -> tuple[Optional[pd.DataFrame], Optional[str]]:
+def _load_weekly_from_release(
+    season: int,
+    verbose: bool = False,
+) -> tuple[Optional[pd.DataFrame], Optional[str]]:
     suffixes = [str(season)]
     current_year = datetime.utcnow().year
     if season >= current_year:
@@ -75,7 +112,7 @@ def _load_weekly_from_release(season: int, verbose: bool = False) -> tuple[Optio
         try:
             df = _download_parquet(url)
             if verbose:
-                print(f"Loaded {len(df)} rows from {url}")
+                logger.debug("Loaded %s rows from %s", len(df), url)
             return df, None
         except Exception as exc:
             errors.append(f"{suffix}: {exc}")
@@ -83,7 +120,9 @@ def _load_weekly_from_release(season: int, verbose: bool = False) -> tuple[Optio
     return None, "release fallback failed: " + "; ".join(errors)
 
 
-def load_weekly(season: int, week: Optional[int], verbose: bool = False) -> pd.DataFrame:
+def load_weekly(
+    season: int, week: Optional[int], verbose: bool = False
+) -> pd.DataFrame:
     errors: list[str] = []
 
     df, err = _load_weekly_nflreadpy(season, verbose=verbose)
@@ -112,7 +151,7 @@ def load_weekly(season: int, week: Optional[int], verbose: bool = False) -> pd.D
     df = df.reset_index(drop=True)
 
     if verbose and errors:
-        print("Warnings:", errors)
+        logger.warning("Data source warnings: %s", "; ".join(errors))
 
     return df
 
@@ -123,7 +162,11 @@ def describe_availability(season: int) -> str:
             sched = nfr.load_schedules(seasons=season)
             schedule_df = sched.to_pandas()
             weeks = sorted(
-                set(pd.to_numeric(schedule_df["week"], errors="coerce").dropna().astype(int))
+                set(
+                    pd.to_numeric(schedule_df["week"], errors="coerce")
+                    .dropna()
+                    .astype(int)
+                )
             )
             return (
                 "Schedule via nflreadpy weeks="
@@ -137,7 +180,11 @@ def describe_availability(season: int) -> str:
             if schedule.empty:
                 return f"Schedule empty for season {season}"
             weeks = sorted(
-                set(pd.to_numeric(schedule["week"], errors="coerce").dropna().astype(int))
+                set(
+                    pd.to_numeric(schedule["week"], errors="coerce")
+                    .dropna()
+                    .astype(int)
+                )
             )
             return (
                 "Schedule via nfl_data_py weeks="
@@ -176,24 +223,62 @@ def parse_week(option: Optional[int]) -> Optional[int]:
     return None
 
 
+def normalize_log_level(level: str) -> str:
+    upper = level.upper()
+    if upper not in VALID_LOG_LEVELS:
+        raise typer.BadParameter(
+            f"Unsupported log level '{level}'. Choose from {sorted(VALID_LOG_LEVELS)}",
+        )
+    return upper
+
+
 def main(
     season: Optional[int] = typer.Option(
-        None, help="Season year (e.g., 2025 or 'current' via env variable)"
+        None,
+        help="Season year (e.g., 2025 or 'current' via env variable)",
     ),
     week: Optional[int] = typer.Option(
-        None, help="Week number (leave blank for all weeks)"
+        None,
+        help="Week number (leave blank for all weeks)",
     ),
-    output: str = typer.Option("nfl_weekly_stats.csv", help="Output CSV path"),
+    output: str = typer.Option(
+        "nfl_weekly_stats.csv",
+        help="Output CSV path",
+    ),
     allow_empty: bool = typer.Option(
-        False, help="Allow empty result without failing (writes empty CSV)"
+        False,
+        help="Allow empty result without failing (writes empty CSV)",
     ),
     verbose: bool = typer.Option(False, help="Enable verbose diagnostics"),
+    log_file: Optional[str] = typer.Option(
+        None,
+        help="Write log output to this file (appends)",
+    ),
+    log_level: str = typer.Option(
+        "INFO",
+        help="Minimum log level for log output (default: INFO)",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        help="Only emit warnings/errors to the console",
+    ),
 ):
+    try:
+        resolved_log_level = normalize_log_level(log_level)
+    except typer.BadParameter as exc:
+        print(str(exc), file=sys.stderr)
+        raise typer.Exit(code=2)
+
+    effective_level = (
+        "DEBUG" if verbose and resolved_log_level == "INFO" else resolved_log_level
+    )
+    configure_logging(effective_level, log_file, quiet and not verbose)
+
     try:
         resolved_season = parse_season(season)
         resolved_week = parse_week(week)
     except typer.BadParameter as exc:
-        print(str(exc), file=sys.stderr)
+        logger.error("%s", exc)
         raise typer.Exit(code=2)
 
     try:
@@ -206,15 +291,20 @@ def main(
         )
         if allow_empty:
             pd.DataFrame().to_csv(output, index=False)
-            print(msg + f" Wrote empty CSV to {output} due to --allow-empty.")
+            logger.warning(
+                "%s Wrote empty CSV to %s due to --allow-empty.", msg, output
+            )
             raise typer.Exit(code=0)
-        print(msg, file=sys.stderr)
+        logger.error("%s", msg)
         raise typer.Exit(code=3)
 
     df.to_csv(output, index=False)
-    print(
-        f"Wrote {len(df)} rows to {output} for season={resolved_season} "
-        f"week={resolved_week if resolved_week is not None else 'all'}"
+    logger.info(
+        "Wrote %s rows to %s for season=%s week=%s",
+        len(df),
+        output,
+        resolved_season,
+        resolved_week if resolved_week is not None else "all",
     )
 
 
@@ -222,5 +312,5 @@ if __name__ == "__main__":
     try:
         typer.run(main)
     except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        logger.exception("Error: %s", exc)
         sys.exit(1)
