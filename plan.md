@@ -77,3 +77,4 @@
 
 \r\n## 8. Weekly ETL Integration (2025-10-04)\r\n\r\n- [x] Extend run-weekly.ps1 to run nfldb CLI update-week after upload (CSV week inference, SkipETL flag).\r\n- [x] Update documentation and scheduling notes for ETL integration.\r\n
 
+\n## 9. ETL Data Source Resilience (2025-10-04)\n\n- [x] Prefer nflreadpy in ETL weekly loader with nfl_data_py and release fallbacks to avoid 404s.\n
