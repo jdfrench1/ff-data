@@ -60,7 +60,7 @@
 
 ## 6. Cleanup Backlog (2025-10-02)
 
-- [ ] Remove root `run-weekly.ps1` stub; rely on `scripts/run-weekly.ps1` for scheduling.
-- [ ] Delete `temp_view.yml`; workflow is superseded by `.github/workflows/load-weekly-data.yml`.
-- [ ] Stop tracking `nfl_weekly_stats.csv`; treat it as a generated artifact (move under `raw/` or ignore).
-- [ ] Purge cached state directories (`.pytest_cache`, `src/nfldb/__pycache__`, `tests/__pycache__`) and add ignores to prevent reappearance.
+- [x] Remove root `run-weekly.ps1` stub; rely on `scripts/run-weekly.ps1` for scheduling.
+- [x] Delete `temp_view.yml`; workflow is superseded by `.github/workflows/load-weekly-data.yml`.
+- [x] Stop tracking `nfl_weekly_stats.csv`; treat it as a generated artifact (move under `raw/` or ignore).
+- [x] Purge cached state directories (`.pytest_cache`, `src/nfldb/__pycache__`, `tests/__pycache__`) and add ignores to prevent reappearance.

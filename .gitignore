@@ -6,3 +6,7 @@ raw/
 logs/
 /actions-runner
 /.actions-runner
+
+/.pytest_cache/
+nfl_weekly_stats.csv
+
