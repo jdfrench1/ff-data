@@ -71,17 +71,15 @@ data using the `nfl_data_py` Python package.
 
 ### Windows Scheduled Refresh
 
-1. Edit `scripts/update-week.ps1` with the season/week you plan to refresh or pass
-   them as arguments when scheduling.
-2. Create a Task Scheduler job that runs weekly and executes:
+1. Use `scripts/run-weekly.ps1` for scheduled loads; it invokes the weekly CSV loader and Postgres upload helpers from the repo root.
+2. Create a Task Scheduler job (Action -> Start a program) with:
    ```text
-   powershell.exe -ExecutionPolicy Bypass -File "C:\path\to\repo\scripts\update-week.ps1" \
-       -Season 2024 -Week 6
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\repo\scripts\run-weekly.ps1" \
+       -Season (Get-Date).Year -LogFile "C:\path\to\logs\weekly_$(Get-Date -Format yyyyMMdd_HHmmss).log"
    ```
-3. The script sets `PYTHONPATH=src`, prefers `.venv\Scripts\python.exe` when
-   present, and pipes command output to `logs/update-week-*.log` for auditing.
-4. Confirm the task account can reach the Postgres target defined in `.env` and
-   has permission to write to the `logs/` directory.
+3. Omit `-Week` to load every published week for the season, or pass `-Week` to upload a single week. Add `-SkipPostgres` if you only need the CSV.
+4. The script creates the log directory, prefers `.venv\Scripts\python.exe`, forwards `--quiet`/`--log-file` to the Python scripts, and trims console noise to warnings/errors.
+5. Confirm the task account can reach the Postgres target defined in `.env`, has write access to the log path, and adjust chunk size via `--chunk-size` if database parameter limits are hit.
 
 ## API & Frontend
 

@@ -1,4 +1,4 @@
-# Project Plan (Local Workflow)
+﻿# Project Plan (Local Workflow)
 
 ## 0. Project Audit
 
@@ -69,5 +69,6 @@
 ## 7. Logging Improvements (2025-10-04)
 
 - [x] Introduce logging configuration for weekly loader and uploader scripts (quiet console + optional file handlers).
-- [ ] Document scheduler usage to leverage new logging options.
+- [x] Document scheduler usage to leverage new logging options.
+
 
