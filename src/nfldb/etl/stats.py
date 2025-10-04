@@ -1,28 +1,110 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
 
-import nfl_data_py as nfl
+import io
+
+try:
+    import nflreadpy as nfr  # type: ignore
+except ImportError:  # pragma: no cover
+    nfr = None  # type: ignore
+
+try:
+    import nfl_data_py as ndp  # type: ignore
+except ImportError:  # pragma: no cover
+    ndp = None  # type: ignore
+
 import pandas as pd
+import requests
 from sqlalchemy import text
 
 from ..db import get_engine
 from .common import cache_path
 from .schedule import _load_schedule_df
 
+
 @dataclass
 class WeeklyData:
     seasons: List[int]
     frame: pd.DataFrame
 
+
 def _weekly_cache_path(season_start: int, season_end: int) -> Path:
     return cache_path("weekly", season_start, season_end)
+
+
+def _load_weekly_nflreadpy(
+    season: int, verbose: bool = False
+) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    if nfr is None:
+        return None, "nflreadpy not installed"
+    try:
+        stats = nfr.load_player_stats(seasons=season, summary_level="week")
+        df = stats.to_pandas()
+        if verbose:
+            print(
+                f"nflreadpy.load_player_stats returned {len(df)} rows for season {season}"
+            )
+        return df, None
+    except Exception as exc:  # pragma: no cover
+        return None, f"nflreadpy.load_player_stats: {exc}"
+
+
+def _load_weekly_nfl_data_py(
+    season: int, verbose: bool = False
+) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    if ndp is None:
+        return None, "nfl_data_py not installed"
+    try:
+        df = ndp.import_weekly_data(years=[season], downcast=False)
+        if verbose:
+            print(
+                f"nfl_data_py.import_weekly_data returned {len(df)} rows for season {season}"
+            )
+        return df, None
+    except Exception as exc:  # pragma: no cover
+        return None, f"nfl_data_py.import_weekly_data: {exc}"
+
+
+def _download_parquet(url: str, timeout: int = 60) -> pd.DataFrame:
+    response = requests.get(url, timeout=timeout)
+    response.raise_for_status()
+    return pd.read_parquet(io.BytesIO(response.content))
+
+
+PLAYER_STATS_RELEASE = (
+    "https://github.com/nflverse/nflverse-data/releases/download/player_stats/"
+    "player_stats_{suffix}.parquet"
+)
+
+
+def _load_weekly_from_release(
+    season: int, verbose: bool = False
+) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    suffixes = [str(season)]
+    current_year = datetime.utcnow().year
+    if season >= current_year:
+        suffixes.append("current")
+    errors: list[str] = []
+    for suffix in suffixes:
+        url = PLAYER_STATS_RELEASE.format(suffix=suffix)
+        try:
+            df = _download_parquet(url)
+            if verbose:
+                print(f"Loaded {len(df)} rows from {url}")
+            return df, None
+        except Exception as exc:
+            errors.append(f"{suffix}: {exc}")
+    return None, "release fallback failed: " + "; ".join(errors)
+
 
 def _load_weekly_df(
     season_start: int,
     season_end: int,
     force_refresh: bool = False,
+    verbose: bool = False,
 ) -> WeeklyData:
     seasons = list(range(season_start, season_end + 1))
     cache_file = _weekly_cache_path(season_start, season_end)
@@ -30,9 +112,35 @@ def _load_weekly_df(
         frame = pd.read_parquet(cache_file)
         return WeeklyData(seasons=seasons, frame=frame)
 
-    frame = nfl.import_weekly_data(seasons)
-    frame.to_parquet(cache_file, index=False)
-    return WeeklyData(seasons=seasons, frame=frame)
+    errors: list[str] = []
+    data_frames: list[pd.DataFrame] = []
+    for season in seasons:
+        df: Optional[pd.DataFrame] = None
+        err: Optional[str]
+        df, err = _load_weekly_nflreadpy(season, verbose=verbose)
+        if df is None and err:
+            errors.append(err)
+        if df is None:
+            df, err = _load_weekly_nfl_data_py(season, verbose=verbose)
+            if df is None and err:
+                errors.append(err)
+        if df is None:
+            df, err = _load_weekly_from_release(season, verbose=verbose)
+            if df is None and err:
+                errors.append(err)
+        if df is None:
+            raise RuntimeError(
+                "No weekly data sources succeeded for season="
+                f"{season}: " + "; ".join(errors)
+            )
+        if "season" not in df.columns:
+            df["season"] = season
+        data_frames.append(df)
+
+    combined = pd.concat(data_frames, ignore_index=True)
+    combined.to_parquet(cache_file, index=False)
+    return WeeklyData(seasons=seasons, frame=combined)
+
 
 def _prepare_schedule_lookup(schedule_df: pd.DataFrame) -> pd.DataFrame:
     records = []
@@ -64,6 +172,7 @@ def _prepare_schedule_lookup(schedule_df: pd.DataFrame) -> pd.DataFrame:
         )
     return pd.DataFrame.from_records(records)
 
+
 def _clean_weekly_frame(
     frame: pd.DataFrame, target_weeks: Optional[Sequence[int]] = None
 ) -> pd.DataFrame:
@@ -81,8 +190,8 @@ def _clean_weekly_frame(
     df = df.reset_index(drop=True)
 
     df["sacks_allowed"] = df["sacks"].fillna(0).where(df["position_group"] == "QB", 0.0)
-    df["def_sacks"] = df["sacks"].fillna(0).where(
-        df["position_group"].isin(["DL", "LB", "DB"]), 0.0
+    df["def_sacks"] = (
+        df["sacks"].fillna(0).where(df["position_group"].isin(["DL", "LB", "DB"]), 0.0)
     )
     fumble_components = [
         df.get("rushing_fumbles_lost", pd.Series(0, index=df.index)).fillna(0),
@@ -95,6 +204,7 @@ def _clean_weekly_frame(
         + df["fumbles_total"]
     )
     return df
+
 
 def _upsert_players(df: pd.DataFrame) -> None:
     player_info = (
@@ -135,6 +245,7 @@ def _upsert_players(df: pd.DataFrame) -> None:
             records,
         )
 
+
 def _aggregate_team_stats(df: pd.DataFrame) -> pd.DataFrame:
     grouped = (
         df.groupby(["season", "week", "recent_team"], as_index=False)
@@ -150,18 +261,19 @@ def _aggregate_team_stats(df: pd.DataFrame) -> pd.DataFrame:
     grouped["yards"] = grouped["pass_yards"] + grouped["rush_yards"]
     return grouped
 
+
 def _nullable(value):
     return None if pd.isna(value) else value
+
 
 def _to_int(value):
     if pd.isna(value):
         return None
     return int(round(float(value)))
 
+
 def _upsert_team_stats(team_stats: pd.DataFrame, lookup: pd.DataFrame) -> None:
-    merged = team_stats.merge(
-        lookup, on=["season", "week", "team_code"], how="left"
-    )
+    merged = team_stats.merge(lookup, on=["season", "week", "team_code"], how="left")
     merged = merged[merged["game_id"].notna()]
     records = []
     for row in merged.itertuples(index=False):
@@ -207,13 +319,18 @@ def _upsert_team_stats(team_stats: pd.DataFrame, lookup: pd.DataFrame) -> None:
             records,
         )
 
+
 def _prepare_player_payload(df: pd.DataFrame, lookup: pd.DataFrame) -> pd.DataFrame:
     merged = df.merge(
-        lookup, left_on=["season", "week", "recent_team"], right_on=["season", "week", "team_code"], how="left"
+        lookup,
+        left_on=["season", "week", "recent_team"],
+        right_on=["season", "week", "team_code"],
+        how="left",
     )
     merged = merged[merged["game_id"].notna()]
     merged["fumbles"] = merged["fumbles_total"].fillna(0)
     return merged
+
 
 def _upsert_player_stats(player_df: pd.DataFrame) -> None:
     if player_df.empty:
@@ -287,6 +404,7 @@ def _upsert_player_stats(player_df: pd.DataFrame) -> None:
             records,
         )
 
+
 def load_weekly_stats(
     season_start: int,
     season_end: int,
@@ -305,5 +423,3 @@ def load_weekly_stats(
 
     player_payload = _prepare_player_payload(weekly_df, schedule_lookup)
     _upsert_player_stats(player_payload)
-
-
