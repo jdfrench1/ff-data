@@ -71,15 +71,15 @@ data using the `nfl_data_py` Python package.
 
 ### Windows Scheduled Refresh
 
-1. Use `scripts/run-weekly.ps1` for scheduled loads; it invokes the weekly CSV loader and Postgres upload helpers from the repo root.
+1. Use `scripts/run-weekly.ps1` for scheduled loads; it now runs the CSV loader, uploads to Postgres, and calls `python -m nfldb.cli update-week` for each week (unless you pass `-SkipETL`).
 2. Create a Task Scheduler job (Action -> Start a program) with:
    ```text
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\repo\scripts\run-weekly.ps1" \
        -Season (Get-Date).Year -LogFile "C:\path\to\logs\weekly_$(Get-Date -Format yyyyMMdd_HHmmss).log"
    ```
-3. Omit `-Week` to load every published week for the season, or pass `-Week` to upload a single week. Add `-SkipPostgres` if you only need the CSV.
-4. The script creates the log directory, prefers `.venv\Scripts\python.exe`, forwards `--quiet`/`--log-file` to the Python scripts, and trims console noise to warnings/errors.
-5. Confirm the task account can reach the Postgres target defined in `.env`, has write access to the log path, and note that the uploader auto-limits batch size for Postgres' 65,535-parameter ceiling (override with `--chunk-size` if needed).
+3. Omit `-Week` to load every published week for the season—the script reads the CSV to decide which weeks to refresh. Use `-SkipPostgres` for a CSV-only run or `-SkipETL` to keep the normalized tables unchanged.
+4. The script loads credentials from `-EnvFile` (if provided), ensures `PYTHONPATH` includes `src`, and keeps console noise to warnings/errors while logging everything to `-LogFile`.
+5. Confirm the task account can reach the Postgres target defined in `.env`, has write access to the log path, and remember the uploader auto-limits batch size for Postgres' 65,535-parameter ceiling (override with `--chunk-size` if needed).
 
 ## API & Frontend
 

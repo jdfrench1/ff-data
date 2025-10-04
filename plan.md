@@ -75,3 +75,5 @@
 - [x] Resolve PowerShell verbose parameter conflict in run-weekly scheduler script.
 
 
+\r\n## 8. Weekly ETL Integration (2025-10-04)\r\n\r\n- [x] Extend run-weekly.ps1 to run nfldb CLI update-week after upload (CSV week inference, SkipETL flag).\r\n- [x] Update documentation and scheduling notes for ETL integration.\r\n
+
