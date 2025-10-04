@@ -124,7 +124,7 @@ try {
             if (Test-Path $Output) {
                 try {
                     $csvFullPath = (Resolve-Path -Path $Output).Path
-                    $escapedCsv = $csvFullPath -replace '\\', '\\\\'
+                    $escapedCsv = $csvFullPath -replace '\', '\\'
                     $weekScript = @"
 import pandas as pd
 from pathlib import Path
@@ -179,3 +179,4 @@ finally {
     }
     Pop-Location
 }
+
