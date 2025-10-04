@@ -144,15 +144,15 @@ print(",".join(str(w) for w in weeks))
                         $weeksToUpdate = $weekResult -split ',' | Where-Object { $_ -ne '' } | ForEach-Object { [int]$_ }
                     }
                     else {
-                        Write-Warning "Unable to infer week values from $Output; skipping ETL update."
+                        Write-Warning "Unable to infer week values from ${Output}; skipping ETL update."
                     }
                 }
                 catch {
-                    Write-Warning "Failed to resolve weeks from $Output: $_"
+                    Write-Warning "Failed to resolve weeks from ${Output}: $_"
                 }
             }
             else {
-                Write-Warning "Output CSV $Output not found when inferring weeks; skipping ETL update."
+                Write-Warning "Output CSV ${Output} not found when inferring weeks; skipping ETL update."
             }
         }
 
