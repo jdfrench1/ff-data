@@ -79,7 +79,7 @@ data using the `nfl_data_py` Python package.
    ```
 3. Omit `-Week` to load every published week for the season, or pass `-Week` to upload a single week. Add `-SkipPostgres` if you only need the CSV.
 4. The script creates the log directory, prefers `.venv\Scripts\python.exe`, forwards `--quiet`/`--log-file` to the Python scripts, and trims console noise to warnings/errors.
-5. Confirm the task account can reach the Postgres target defined in `.env`, has write access to the log path, and adjust chunk size via `--chunk-size` if database parameter limits are hit.
+5. Confirm the task account can reach the Postgres target defined in `.env`, has write access to the log path, and note that the uploader auto-limits batch size for Postgres' 65,535-parameter ceiling (override with `--chunk-size` if needed).
 
 ## API & Frontend
 
