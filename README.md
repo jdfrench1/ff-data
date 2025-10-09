@@ -71,16 +71,22 @@ data using the `nfl_data_py` Python package.
 
 ### Windows Scheduled Refresh
 
-1. Use `scripts/run-weekly.ps1` for scheduled loads; it now runs the CSV loader, uploads to Postgres, and calls `python -m nfldb.cli update-week` for each week (unless you pass `-SkipETL`).
-2. Create a Task Scheduler job (Action -> Start a program) with:
+1. **Database-only weekly touch-up** - schedule the Python helper that resolves the latest completed week and runs the same loaders as `nfldb.cli update-week`:
    ```text
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\repo\scripts\run-weekly.ps1" \
-       -Season (Get-Date).Year -LogFile "C:\path\to\logs\weekly_$(Get-Date -Format yyyyMMdd_HHmmss).log"
+   C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -Command ^
+     "py -3 C:\path\to\repo\scripts\update_current_week.py --log-file C:\logs\nfldb-current.log"
    ```
-3. Omit `-Week` to load every published week for the season—the script reads the CSV to decide which weeks to refresh. Use `-SkipPostgres` for a CSV-only run or `-SkipETL` to keep the normalized tables unchanged.
-4. The script loads credentials from `-EnvFile` (if provided), ensures `PYTHONPATH` includes `src`, and keeps console noise to warnings/errors while logging everything to `-LogFile`.
-5. Confirm the task account can reach the Postgres target defined in `.env`, has write access to the log path, and remember the uploader auto-limits batch size for Postgres' 65,535-parameter ceiling (override with `--chunk-size` if needed).
-
+   - Optional overrides: `--force-refresh` to redownload cached parquet files, `--season` / `--week` to pin a specific slice, `--dry-run` to just log the resolved week.
+   - Ensure the scheduled user inherits the database credentials (via `.env` or environment variables) and has write access to the log directory.
+2. **End-to-end CSV + upload** - keep using `scripts/run-weekly.ps1` when you also need to regenerate the CSV export and upload it before refreshing the normalized tables:
+   ```text
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\repo\scripts\run-weekly.ps1" `
+       -Season (Get-Date).Year `
+       -LogFile "C:\path\to\logs\weekly_$(Get-Date -Format yyyyMMdd_HHmmss).log"
+   ```
+   Omit `-Week` to let the script infer completed weeks from the CSV, add `-SkipPostgres` for a CSV-only run, or `-SkipETL` to leave the Postgres tables untouched.
+3. Both scripts respect `.env` when `-EnvFile` (PowerShell) or environment variables are present, ensure `PYTHONPATH` covers `src`, and default console output to warnings/errors while still writing full details to the chosen log file.
+4. If you run inside Task Scheduler, pick "Run with highest privileges" when the account needs network access to the database, and verify that the virtual environment (`.venv`) is created up front so `py` can resolve dependencies without activating the shell profile.
 ## API & Frontend
 
 ### Run the API server

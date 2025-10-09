@@ -9,6 +9,6 @@
 - [x] Added `scripts/update_current_week.py`, a Python entry point for Task Scheduler that resolves the latest completed week and executes the CLI-equivalent ETL loaders.
 - [x] Created unit tests for the week resolver using a stubbed `nfl_data_py.import_schedules` to avoid live network calls.
 
-## Phase 3 - Documentation & Validation (Pending)
-- [ ] Document how to schedule the new script (example Task Scheduler command, environment expectations).
-- [ ] Run or outline validation steps (pytest focus) once implementation is complete.
+## Phase 3 - Documentation & Validation (Complete)
+- [x] Documented Task Scheduler usage for `scripts/update_current_week.py` alongside the existing PowerShell pipeline in `README.md`.
+- [x] Ran `pytest -q` locally to confirm the suite (including new resolver tests) passes end-to-end.
