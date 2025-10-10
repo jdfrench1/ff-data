@@ -12,3 +12,18 @@
 ## Phase 3 - Documentation & Validation (Complete)
 - [x] Documented Task Scheduler usage for `scripts/update_current_week.py` alongside the existing PowerShell pipeline in `README.md`.
 - [x] Ran `pytest -q` locally to confirm the suite (including new resolver tests) passes end-to-end.
+
+# Shared Venv Alignment
+
+## Phase 1 - Analysis (Complete)
+- [x] Cataloged Python entry points (root `ffscraper.py` plus scripts under `scripts/`) and noted they each embed their own `sys.path`/env handling.
+- [x] Verified backend modules (`src/nfldb/*`) expect `DATABASE_URL` at import time and rely on the active interpreter's installed packages.
+- [x] Identified need for a shared bootstrap that (a) re-executes with `.venv`'s interpreter when necessary, (b) ensures `src/` is on `sys.path`, and (c) optionally loads `.env` for local runs.
+
+## Phase 2 - Implementation (Pending)
+- [ ] Introduce a reusable runtime helper (likely under `src/nfldb/`) that guarantees scripts run inside the project virtual environment and load environment variables.
+- [ ] Update all Python scripts (including `ffscraper.py`) to call the helper before importing project modules.
+
+## Phase 3 - Validation & Docs (Pending)
+- [ ] Smoke-test key scripts via the shared helper (dry-run where appropriate) and rerun the pytest suite.
+- [ ] Update README or developer docs to describe the new bootstrap expectation for invoking scripts/task scheduler jobs.
