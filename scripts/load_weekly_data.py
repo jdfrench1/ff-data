@@ -1,4 +1,10 @@
-﻿import io
+from __future__ import annotations
+
+from _bootstrap import activate
+
+activate()
+
+import io
 import logging
 import os
 import sys

@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+from _bootstrap import activate
+
+activate()
+
 import argparse
 import logging
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional, Sequence, Tuple
 
 import pandas as pd
@@ -19,11 +21,6 @@ except ImportError as exc:  # pragma: no cover
     raise RuntimeError(
         "nfl_data_py is required for scripts/update_current_week.py"
     ) from exc
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_DIR = REPO_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
 
 from nfldb.etl.schedule import load_games, load_seasons_and_weeks
 from nfldb.etl.stats import load_weekly_stats

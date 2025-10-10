@@ -1,4 +1,10 @@
-﻿import argparse
+from __future__ import annotations
+
+from _bootstrap import activate
+
+activate()
+
+import argparse
 import logging
 import os
 from pathlib import Path

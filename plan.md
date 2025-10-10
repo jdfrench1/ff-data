@@ -21,8 +21,9 @@
 - [x] Identified need for a shared bootstrap that (a) re-executes with `.venv`'s interpreter when necessary, (b) ensures `src/` is on `sys.path`, and (c) optionally loads `.env` for local runs.
 
 ## Phase 2 - Implementation (Pending)
-- [ ] Introduce a reusable runtime helper (likely under `src/nfldb/`) that guarantees scripts run inside the project virtual environment and load environment variables.
-- [ ] Update all Python scripts (including `ffscraper.py`) to call the helper before importing project modules.
+## Phase 2 - Implementation (Complete)
+- [x] Added `src/nfldb/runtime.py` plus `scripts/_bootstrap.py` to re-exec into `.venv`, inject `src/`, and load `.env` defaults.
+- [x] Updated `ffscraper.py` and all task scripts to call the bootstrapper before importing third-party modules, ensuring consistent dependency versions.
 
 ## Phase 3 - Validation & Docs (Pending)
 - [ ] Smoke-test key scripts via the shared helper (dry-run where appropriate) and rerun the pytest suite.
