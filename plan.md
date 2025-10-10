@@ -25,6 +25,6 @@
 - [x] Added `src/nfldb/runtime.py` plus `scripts/_bootstrap.py` to re-exec into `.venv`, inject `src/`, and load `.env` defaults.
 - [x] Updated `ffscraper.py` and all task scripts to call the bootstrapper before importing third-party modules, ensuring consistent dependency versions.
 
-## Phase 3 - Validation & Docs (Pending)
-- [ ] Smoke-test key scripts via the shared helper (dry-run where appropriate) and rerun the pytest suite.
-- [ ] Update README or developer docs to describe the new bootstrap expectation for invoking scripts/task scheduler jobs.
+## Phase 3 - Validation & Docs (Complete)
+- [x] Smoked scripts via the shared helper (dry-run for weekly updater/loader/uploader, help check for uploader/credentials, and ffscraper run) and reran pytest for full coverage.
+- [x] Documented Task Scheduler usage now that the Python entry points bootstrap into the shared virtualenv.
