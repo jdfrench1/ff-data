@@ -37,5 +37,5 @@
 ## Phase 2 - Rewrite (Complete)
 - [x] Redrafted `README.md` to focus on bootstrapper usage, environment expectations, and end-to-end workflows.
 
-## Phase 3 - Proofing (Pending)
-- [ ] Proofread the updated README, ensure instructions are consistent, and stage for commit.
+## Phase 3 - Proofing (Complete)
+- [x] Proofread the updated README, normalized formatting to ASCII-friendly punctuation, and prepared artifacts for final review.

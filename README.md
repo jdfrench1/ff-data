@@ -6,9 +6,9 @@ inside the same Python environment with consistent configuration.
 
 The bootstrapper is split across two helpers:
 
-- `src/nfldb/runtime.py::bootstrap()` &mdash; core logic that re-executes inside
+- `src/nfldb/runtime.py::bootstrap()` - core logic that re-executes inside
   `.venv`, prepends `src/` to `sys.path`, and loads `.env` values.
-- `scripts/_bootstrap.py::activate()` &mdash; thin wrapper used by standalone
+- `scripts/_bootstrap.py::activate()` - thin wrapper used by standalone
   scripts (PowerShell or Python) to trigger the same behavior.
 
 Callers import one of these helpers before loading third-party packages or any
@@ -112,16 +112,16 @@ inside `.venv` already, the helper becomes a no-op.
 
 ## Project Layout
 
-- `ffscraper.py` &mdash; Pro-Football-Reference passer scrape that writes
+- `ffscraper.py` - Pro-Football-Reference passer scrape that writes
   `nfl_player_stats.csv`, bootstrapped before importing requests/pandas.
-- `src/nfldb/` &mdash; Application package housing the CLI, ETL modules, and
+- `src/nfldb/` - Application package housing the CLI, ETL modules, and
   `runtime.py`.
-- `scripts/` &mdash; Automation helpers (`_bootstrap.py`, weekly updater, PowerShell
+- `scripts/` - Automation helpers (`_bootstrap.py`, weekly updater, PowerShell
   orchestrator) that import the bootstrapper first.
-- `raw/` &mdash; Cached CSV/Parquet sources (gitignored).
-- `tests/` &mdash; Pytest suites mirroring `src/`.
-- `notebooks/` &mdash; Exploratory analysis kept outside production paths.
-- `docker-compose.yml`, `Dockerfile` &mdash; Container orchestration that respects
+- `raw/` - Cached CSV/Parquet sources (gitignored).
+- `tests/` - Pytest suites mirroring `src/`.
+- `notebooks/` - Exploratory analysis kept outside production paths.
+- `docker-compose.yml`, `Dockerfile` - Container orchestration that respects
   the same bootstrap logic.
 
 ---
