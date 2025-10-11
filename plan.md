@@ -13,3 +13,15 @@
 - [x] Implemented FastAPI endpoints for player search and weekly timelines with derived team-change events.
 - [x] Built the Vue player selection experience, including sparkline trends, team change callouts, and weekly stat tables.
 - [x] Added pytest coverage for the new endpoints plus lint/build automation for the Vue app.
+
+## Phase 4 - Player Search Diagnostics (Complete)
+- [x] Reviewed the `/api/v1/players` query and identified the Postgres failure caused by `COALESCE(g.kickoff_ts, '')`, which mixes timestamp and text types within the `ROW_NUMBER` sort.
+- [x] Confirmed the failure mode explains missing search results in the frontend due to the backend raising an error when hitting Postgres.
+
+## Phase 5 - Player Search Fix (Pending)
+- [ ] Replace the unsafe `COALESCE` usage with a cross-database safe ordering strategy for `ROW_NUMBER` so latest-team selection works on Postgres.
+- [ ] Add regression coverage ensuring player searches succeed against fixture data without raising errors.
+
+## Phase 6 - Validation & Wrap-up (Pending)
+- [ ] Run the automated test suite and lint checks.
+- [ ] Summarize changes, merge the fix branch, and coordinate any follow-up deployment steps.
