@@ -54,3 +54,19 @@
 ## Phase 3 - Validation (Complete)
 - [x] Ran `pytest tests/test_etl.py -q` to cover both schema variants of the weekly ETL.
 - [x] Executed `scripts/update_current_week.py --dry-run` with logging to confirm successful week resolution without hitting the ETL.
+
+# Remove PFR Scraper
+
+## Phase 1 - Analysis (Complete)
+- [x] Confirmed `ffscraper.py`, its container assets, and CSV artefacts are the only production code paths scraping Pro-Football-Reference.
+- [x] Cataloged dependent references across `Dockerfile`, `docker-compose.yml`, `README.md`, `AGENTS.md`, and repository outputs (`nfl_player_stats.csv`).
+- [x] Identified `beautifulsoup4` and `lxml` in `requirements.txt` as scraper-only dependencies safe to remove with the refactor.
+- [x] Verified the maintained ETL stack (`src/nfldb/*`) already relies on `nflreadpy`/`nfl_data_py`, providing the replacement data sources.
+
+## Phase 2 - Implementation (Pending)
+- [ ] Remove the Pro-Football-Reference scraper entry point, replace container orchestration, and align runtime/configuration with the surviving ETL tooling.
+- [ ] Drop scraper-only requirements and clean up generated CSV outputs tracked in the repo.
+
+## Phase 3 - Validation & Docs (Pending)
+- [ ] Run the project test suite and targeted smoke checks against the updated workflow.
+- [ ] Refresh README/AGENTS guidance to reflect the new data ingestion path and validate deployment notes.
