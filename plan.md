@@ -51,5 +51,6 @@
 - [x] Normalized weekly ETL inputs to tolerate feeds lacking `recent_team`, `interceptions`, and `sacks`, deriving those fields from `team`, `passing_interceptions`, `sacks_suffered`, and `def_sacks`.
 - [x] Added an alternate-schema weekly fixture and regression test to exercise the updated pipeline.
 
-## Phase 3 - Validation (Pending)
-- [ ] Run the weekly ETL tests plus a targeted dry run of `scripts/update_current_week.py` to verify regression fixes.
+## Phase 3 - Validation (Complete)
+- [x] Ran `pytest tests/test_etl.py -q` to cover both schema variants of the weekly ETL.
+- [x] Executed `scripts/update_current_week.py --dry-run` with logging to confirm successful week resolution without hitting the ETL.
