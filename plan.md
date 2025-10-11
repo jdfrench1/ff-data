@@ -70,3 +70,18 @@
 ## Phase 3 - Validation & Docs (Pending)
 - [ ] Run the project test suite and targeted smoke checks against the updated workflow.
 - [ ] Refresh README/AGENTS guidance to reflect the new data ingestion path and validate deployment notes.
+
+# Frontend Vue Migration
+
+## Phase 1 - Analysis (Complete)
+- [x] Reviewed the existing React frontend to scope the Vue rewrite and confirm the initial player timeline focus.
+- [x] Surveyed backend schema (`players`, `roster_assignments`, `player_game_stats`) and ETL outputs to ensure player stats and team history are available.
+- [x] Outlined required API additions: player search/list endpoint, weekly stats timeline with aggregated metrics, and team-change events derived from roster assignments.
+
+## Phase 2 - Implementation (Pending)
+- [ ] Replace the React app with a Vue 3 + TypeScript workspace scaffolded via Vite, update tooling, and remove obsolete dependencies.
+- [ ] Establish shared UI theming/layout foundations for future features alongside the player timeline view.
+
+## Phase 3 - Feature Integration (Pending)
+- [ ] Build the player selection timeline component, integrate new API endpoints, and highlight team transitions across the timeline.
+- [ ] Add automated tests and documentation updates covering the Vue frontend setup and player feature usage.
