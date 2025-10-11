@@ -34,8 +34,8 @@
 ## Phase 1 - Analysis (Complete)
 - [x] Reviewed `README.md`, `src/nfldb/runtime.py`, `scripts/_bootstrap.py`, and related entry points to capture the shared bootstrapper behavior.
 
-## Phase 2 - Rewrite (In Progress)
-- [ ] Redraft `README.md` to focus on bootstrapper usage, environment expectations, and end-to-end workflows.
+## Phase 2 - Rewrite (Complete)
+- [x] Redrafted `README.md` to focus on bootstrapper usage, environment expectations, and end-to-end workflows.
 
 ## Phase 3 - Proofing (Pending)
 - [ ] Proofread the updated README, ensure instructions are consistent, and stage for commit.
