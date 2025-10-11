@@ -39,3 +39,16 @@
 
 ## Phase 3 - Proofing (Complete)
 - [x] Proofread the updated README, normalized formatting to ASCII-friendly punctuation, and prepared artifacts for final review.
+
+# Weekly Stats Schema Regression
+
+## Phase 1 - Analysis (Complete)
+- [x] Reproduced the failure by examining `raw/weekly_2025_2025.parquet` to understand the ingested schema.
+- [x] Confirmed the new data source omits `recent_team` and `interceptions`, supplying `team`, `passing_interceptions`, `sacks_suffered`, and `def_sacks` instead.
+- [x] Determined we need a normalization layer so the ETL accepts both the legacy `nfl_data_py` columns and the new `nflreadpy`-style names.
+
+## Phase 2 - Implementation (Pending)
+- [ ] Introduce column normalization in `nfldb.etl.stats` and extend fixtures to cover the alternate schema.
+
+## Phase 3 - Validation (Pending)
+- [ ] Run the weekly ETL tests plus a targeted dry run of `scripts/update_current_week.py` to verify regression fixes.
