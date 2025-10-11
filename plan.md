@@ -28,3 +28,14 @@
 ## Phase 3 - Validation & Docs (Complete)
 - [x] Smoked scripts via the shared helper (dry-run for weekly updater/loader/uploader, help check for uploader/credentials, and ffscraper run) and reran pytest for full coverage.
 - [x] Documented Task Scheduler usage now that the Python entry points bootstrap into the shared virtualenv.
+
+# README Bootstrap Alignment
+
+## Phase 1 - Analysis (Complete)
+- [x] Reviewed `README.md`, `src/nfldb/runtime.py`, `scripts/_bootstrap.py`, and related entry points to capture the shared bootstrapper behavior.
+
+## Phase 2 - Rewrite (In Progress)
+- [ ] Redraft `README.md` to focus on bootstrapper usage, environment expectations, and end-to-end workflows.
+
+## Phase 3 - Proofing (Pending)
+- [ ] Proofread the updated README, ensure instructions are consistent, and stage for commit.
