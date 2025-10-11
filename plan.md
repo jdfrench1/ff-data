@@ -22,6 +22,6 @@
 - [x] Replaced the unsafe `COALESCE` usage with a cross-database safe ordering strategy for `ROW_NUMBER` so latest-team selection works on Postgres.
 - [x] Added regression coverage ensuring player searches succeed against fixture data without raising errors.
 
-## Phase 6 - Validation & Wrap-up (Pending)
-- [ ] Run the automated test suite and lint checks.
-- [ ] Summarize changes, merge the fix branch, and coordinate any follow-up deployment steps.
+## Phase 6 - Validation & Wrap-up (Complete)
+- [x] Ran `pytest -q` to verify regression coverage; all suites pass.
+- [x] Prepared to summarize backend fix, merge validation branch, and note deployment follow-ups.
