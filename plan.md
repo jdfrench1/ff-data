@@ -18,9 +18,9 @@
 - [x] Reviewed the `/api/v1/players` query and identified the Postgres failure caused by `COALESCE(g.kickoff_ts, '')`, which mixes timestamp and text types within the `ROW_NUMBER` sort.
 - [x] Confirmed the failure mode explains missing search results in the frontend due to the backend raising an error when hitting Postgres.
 
-## Phase 5 - Player Search Fix (Pending)
-- [ ] Replace the unsafe `COALESCE` usage with a cross-database safe ordering strategy for `ROW_NUMBER` so latest-team selection works on Postgres.
-- [ ] Add regression coverage ensuring player searches succeed against fixture data without raising errors.
+## Phase 5 - Player Search Fix (Complete)
+- [x] Replaced the unsafe `COALESCE` usage with a cross-database safe ordering strategy for `ROW_NUMBER` so latest-team selection works on Postgres.
+- [x] Added regression coverage ensuring player searches succeed against fixture data without raising errors.
 
 ## Phase 6 - Validation & Wrap-up (Pending)
 - [ ] Run the automated test suite and lint checks.

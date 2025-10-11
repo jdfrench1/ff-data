@@ -403,7 +403,8 @@ def search_players(
                         PARTITION BY stats.player_id
                         ORDER BY s.year DESC,
                                  w.week_number DESC,
-                                 COALESCE(g.kickoff_ts, '') DESC,
+                                 CASE WHEN g.kickoff_ts IS NULL THEN 1 ELSE 0 END ASC,
+                                 g.kickoff_ts DESC,
                                  stats.game_id DESC
                     ) AS row_num
                 FROM player_game_stats AS stats

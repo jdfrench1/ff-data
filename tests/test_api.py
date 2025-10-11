@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy import text
+
+from nfldb.db import session_scope
+
 from .conftest import AWAY_TEAM, HOME_TEAM, SEASON, START_WEEK
 
 
@@ -81,3 +85,15 @@ def test_player_timeline_not_found(client, run_full_pipeline):
     missing = client.get("/api/v1/players/9999/timeline")
     assert missing.status_code == 404
     assert missing.json()["detail"] == "Player not found"
+
+
+def test_player_search_handles_missing_kickoff(client, run_full_pipeline):
+    run_full_pipeline
+
+    with session_scope() as session:
+        session.execute(text("UPDATE games SET kickoff_ts = NULL"))
+
+    search = client.get("/api/v1/players", params={"search": "Quarter"})
+    assert search.status_code == 200
+    payload = search.json()
+    assert any(player["full_name"] == "Quarterback One" for player in payload)
