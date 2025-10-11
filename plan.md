@@ -9,7 +9,7 @@
 - [x] Configured linting, formatting, and build tooling with ESLint, vue-tsc, and bundler-aware TypeScript settings.
 - [x] Verified the production build pipeline via `npm run build` to ensure parity with previous automation hooks.
 
-## Phase 3 - Player Timeline Feature (Pending)
-- [ ] Implement backend endpoints supporting player lookup, historical stats, and team-change events.
-- [ ] Build the Vue player selection timeline with highlighted team transitions and responsive data displays.
-- [ ] Add automated tests and documentation updates covering the new frontend workflows.
+## Phase 3 - Player Timeline Feature (Complete)
+- [x] Implemented FastAPI endpoints for player search and weekly timelines with derived team-change events.
+- [x] Built the Vue player selection experience, including sparkline trends, team change callouts, and weekly stat tables.
+- [x] Added pytest coverage for the new endpoints plus lint/build automation for the Vue app.
