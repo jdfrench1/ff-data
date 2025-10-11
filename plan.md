@@ -47,8 +47,9 @@
 - [x] Confirmed the new data source omits `recent_team` and `interceptions`, supplying `team`, `passing_interceptions`, `sacks_suffered`, and `def_sacks` instead.
 - [x] Determined we need a normalization layer so the ETL accepts both the legacy `nfl_data_py` columns and the new `nflreadpy`-style names.
 
-## Phase 2 - Implementation (Pending)
-- [ ] Introduce column normalization in `nfldb.etl.stats` and extend fixtures to cover the alternate schema.
+## Phase 2 - Implementation (Complete)
+- [x] Normalized weekly ETL inputs to tolerate feeds lacking `recent_team`, `interceptions`, and `sacks`, deriving those fields from `team`, `passing_interceptions`, `sacks_suffered`, and `def_sacks`.
+- [x] Added an alternate-schema weekly fixture and regression test to exercise the updated pipeline.
 
 ## Phase 3 - Validation (Pending)
 - [ ] Run the weekly ETL tests plus a targeted dry run of `scripts/update_current_week.py` to verify regression fixes.

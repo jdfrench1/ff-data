@@ -367,6 +367,25 @@ def write_weekly(raw_dir: Path) -> WeeklyWriter:
 
 
 @pytest.fixture()
+def write_weekly_alt_schema(
+    raw_dir: Path, write_weekly: WeeklyWriter
+) -> WeeklyWriter:
+    def _writer() -> Path:
+        path = write_weekly()
+        df = pd.read_parquet(path)
+        qb_mask = df["position_group"] == "QB"
+        df["team"] = df["recent_team"]
+        df["passing_interceptions"] = df["interceptions"]
+        df["sacks_suffered"] = df["sacks"].where(qb_mask, 0).fillna(0)
+        df["def_sacks"] = df["sacks"].where(~qb_mask, 0).fillna(0)
+        df = df.drop(columns=["recent_team", "interceptions", "sacks"])
+        df.to_parquet(path, index=False)
+        return path
+
+    return _writer
+
+
+@pytest.fixture()
 def client(database):
     return TestClient(app)
 

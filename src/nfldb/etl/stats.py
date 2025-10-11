@@ -177,6 +177,54 @@ def _clean_weekly_frame(
     frame: pd.DataFrame, target_weeks: Optional[Sequence[int]] = None
 ) -> pd.DataFrame:
     df = frame.copy()
+
+    if "recent_team" not in df.columns:
+        if "team" in df.columns:
+            df["recent_team"] = df["team"]
+        else:  # pragma: no cover - defensive guard for unexpected feeds
+            raise KeyError(
+                "weekly stats feed is missing both 'recent_team' and 'team' columns"
+            )
+
+    if "interceptions" not in df.columns:
+        if "passing_interceptions" in df.columns:
+            df["interceptions"] = df["passing_interceptions"]
+        else:
+            df["interceptions"] = 0
+
+    qb_sacks_source: pd.Series
+    if "sacks" in df.columns:
+        qb_sacks_source = df["sacks"]
+    elif "sacks_suffered" in df.columns:
+        qb_sacks_source = df["sacks_suffered"]
+    else:
+        qb_sacks_source = pd.Series(0, index=df.index, dtype="float64")
+
+    defender_sacks_source: pd.Series
+    if "def_sacks" in df.columns:
+        defender_sacks_source = df["def_sacks"]
+    elif "sacks" in df.columns:
+        defender_sacks_source = df["sacks"]
+    else:
+        defender_sacks_source = pd.Series(0, index=df.index, dtype="float64")
+
+    position_group = df.get("position_group")
+    if position_group is None:
+        position_group = pd.Series("", index=df.index, dtype="object")
+    position_group = position_group.fillna("")
+
+    qb_mask = position_group == "QB"
+    defender_mask = position_group.isin(["DL", "LB", "DB"])
+
+    qb_sacks_values = qb_sacks_source.fillna(0)
+    defender_sacks_values = defender_sacks_source.fillna(0)
+
+    df["sacks"] = 0.0
+    if qb_mask.any():
+        df.loc[qb_mask, "sacks"] = qb_sacks_values[qb_mask]
+    if defender_mask.any():
+        df.loc[defender_mask, "sacks"] = defender_sacks_values[defender_mask]
+
     df = df[df["player_id"].notna()]
     df = df[df["player_id"] != ""]
     df = df[df["recent_team"].notna()]
@@ -189,10 +237,8 @@ def _clean_weekly_frame(
         df = df[df["week"].isin(list(target_weeks))]
     df = df.reset_index(drop=True)
 
-    df["sacks_allowed"] = df["sacks"].fillna(0).where(df["position_group"] == "QB", 0.0)
-    df["def_sacks"] = (
-        df["sacks"].fillna(0).where(df["position_group"].isin(["DL", "LB", "DB"]), 0.0)
-    )
+    df["sacks_allowed"] = qb_sacks_values.where(qb_mask, 0.0)
+    df["def_sacks"] = defender_sacks_values.where(defender_mask, 0.0)
     fumble_components = [
         df.get("rushing_fumbles_lost", pd.Series(0, index=df.index)).fillna(0),
         df.get("receiving_fumbles_lost", pd.Series(0, index=df.index)).fillna(0),

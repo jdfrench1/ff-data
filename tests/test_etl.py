@@ -124,3 +124,64 @@ def test_load_weekly_stats_transforms(database, write_schedule, write_weekly):
     assert qb_two.pass_att == 30
     assert qb_two.pass_yds == 245
     assert qb_two.sacks == 3
+
+
+def test_load_weekly_stats_handles_alt_schema(
+    database, write_schedule, write_weekly_alt_schema
+):
+    write_schedule()
+    write_weekly_alt_schema()
+    load_seasons_and_weeks(SEASON, SEASON)
+    load_games(SEASON, SEASON)
+    load_weekly_stats(SEASON, SEASON)
+
+    with database.begin() as conn:
+        team_stats_rows = conn.execute(
+            text(
+                """
+                SELECT t.team_code, stats.pass_yards, stats.sacks_allowed, stats.sacks_made,
+                       stats.turnovers
+                FROM team_game_stats AS stats
+                JOIN teams AS t ON stats.team_id = t.team_id
+                ORDER BY t.team_code
+                """
+            )
+        ).fetchall()
+
+        player_stats_rows = conn.execute(
+            text(
+                """
+                SELECT p.gsis_id, pg.pass_att, pg.pass_yds, pg.sacks, pg.fantasy_ppr
+                FROM player_game_stats AS pg
+                JOIN players AS p ON pg.player_id = p.player_id
+                ORDER BY p.gsis_id
+                """
+            )
+        ).fetchall()
+
+    team_stats = {row.team_code: row for row in team_stats_rows}
+    player_stats = {row.gsis_id: row for row in player_stats_rows}
+
+    home_stats = team_stats[HOME_TEAM]
+    away_stats = team_stats[AWAY_TEAM]
+
+    assert home_stats.pass_yards == 280
+    assert home_stats.sacks_allowed == 2
+    assert home_stats.sacks_made == 2
+    assert home_stats.turnovers == 1
+
+    assert away_stats.pass_yards == 245
+    assert away_stats.sacks_allowed == 3
+    assert away_stats.sacks_made == 2
+    assert away_stats.turnovers == 0
+
+    qb_one = player_stats["QB1"]
+    assert qb_one.pass_att == 35
+    assert qb_one.pass_yds == 280
+    assert qb_one.sacks == 2
+    assert qb_one.fantasy_ppr == 24.5
+
+    qb_two = player_stats["QB2"]
+    assert qb_two.pass_att == 30
+    assert qb_two.pass_yds == 245
+    assert qb_two.sacks == 3
