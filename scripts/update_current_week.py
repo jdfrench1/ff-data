@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
-from _bootstrap import activate
+try:
+    from ._bootstrap import activate  # type: ignore
+except ImportError:  # pragma: no cover - fallback for direct execution
+    from _bootstrap import activate  # type: ignore
 
 activate()
 

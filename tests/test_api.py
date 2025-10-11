@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .conftest import AWAY_TEAM, HOME_TEAM, SEASON
+from .conftest import AWAY_TEAM, HOME_TEAM, SEASON, START_WEEK
 
 
 def test_api_endpoints(client, run_full_pipeline):
@@ -44,3 +44,40 @@ def test_api_endpoints(client, run_full_pipeline):
     missing = client.get("/api/v1/games/9999")
     assert missing.status_code == 404
     assert missing.json()["detail"] == "Game not found"
+
+
+def test_player_search_and_timeline(client, run_full_pipeline):
+    run_full_pipeline
+
+    search = client.get("/api/v1/players", params={"search": "Quarter"})
+    assert search.status_code == 200
+    players = search.json()
+    assert len(players) >= 1
+    qb = players[0]
+    assert "Quarterback" in qb["full_name"]
+    assert qb["team_code"] == HOME_TEAM
+
+    timeline = client.get(f"/api/v1/players/{qb['player_id']}/timeline")
+    assert timeline.status_code == 200
+    payload = timeline.json()
+    assert payload["player_id"] == qb["player_id"]
+    assert payload["timeline"]
+    first_week = payload["timeline"][0]
+    assert first_week["season"] == SEASON
+    assert first_week["week"] == START_WEEK
+    assert first_week["team_code"] == HOME_TEAM
+    assert first_week["games_played"] == 1
+    assert payload["team_events"][0]["team_code"] == HOME_TEAM
+
+    filtered = client.get(
+        f"/api/v1/players/{qb['player_id']}/timeline", params={"season": SEASON}
+    )
+    assert filtered.status_code == 200
+    assert filtered.json()["timeline"] == payload["timeline"]
+
+
+def test_player_timeline_not_found(client, run_full_pipeline):
+    run_full_pipeline
+    missing = client.get("/api/v1/players/9999/timeline")
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "Player not found"
