@@ -31,3 +31,7 @@
 
 ## Phase 8 - Frontend Smoke Test (Complete)
 - [x] Launched the API against a freshly seeded `smoke.db` SQLite snapshot and issued `fetch` calls mimicking the Vue client; verified player search and timeline payloads return successfully for \"Patrick\" queries.
+
+## Phase 9 - Timeline Customization (Complete)
+- [x] Introduced chart controls for scale mode, manual bounds, and overlay toggles to make the timeline visualization configurable.
+- [x] Enhanced the SVG timeline with axis labels, average line, season markers, and team-change indicators tied to weekly data.
