@@ -25,3 +25,9 @@
 ## Phase 6 - Validation & Wrap-up (Complete)
 - [x] Ran `pytest -q` to verify regression coverage; all suites pass.
 - [x] Prepared to summarize backend fix, merge validation branch, and note deployment follow-ups.
+
+## Phase 7 - API Redeploy (Complete)
+- [x] Relaunched the FastAPI service via `uvicorn`, verified the `/health` endpoint on port 8100, and confirmed new code is active.
+
+## Phase 8 - Frontend Smoke Test (Pending)
+- [ ] Exercise the Vue player search against the refreshed API and capture results to confirm players surface correctly.
