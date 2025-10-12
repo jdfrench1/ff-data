@@ -29,5 +29,5 @@
 ## Phase 7 - API Redeploy (Complete)
 - [x] Relaunched the FastAPI service via `uvicorn`, verified the `/health` endpoint on port 8100, and confirmed new code is active.
 
-## Phase 8 - Frontend Smoke Test (Pending)
-- [ ] Exercise the Vue player search against the refreshed API and capture results to confirm players surface correctly.
+## Phase 8 - Frontend Smoke Test (Complete)
+- [x] Launched the API against a freshly seeded `smoke.db` SQLite snapshot and issued `fetch` calls mimicking the Vue client; verified player search and timeline payloads return successfully for \"Patrick\" queries.
