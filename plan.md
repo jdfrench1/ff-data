@@ -35,3 +35,7 @@
 ## Phase 9 - Timeline Customization (Complete)
 - [x] Introduced chart controls for scale mode, manual bounds, and overlay toggles to make the timeline visualization configurable.
 - [x] Enhanced the SVG timeline with axis labels, average line, season markers, and team-change indicators tied to weekly data.
+
+## Phase 10 - Data Exploration Notebook (Complete)
+- [x] Added `notebooks/data_exploration.ipynb` that authenticates with Postgres via SQLAlchemy for ad-hoc analysis.
+- [x] Provided helpers to list tables, preview rows, and execute custom SQL directly from the notebook.
