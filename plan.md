@@ -39,3 +39,7 @@
 ## Phase 10 - Data Exploration Notebook (Complete)
 - [x] Added `notebooks/data_exploration.ipynb` that authenticates with Postgres via SQLAlchemy for ad-hoc analysis.
 - [x] Provided helpers to list tables, preview rows, and execute custom SQL directly from the notebook.
+
+## Phase 11 - QB Metrics Notebook (Complete)
+- [x] Introduced season-level quarterback aggregation helpers to compute ADOT and rushing usage per game inside `notebooks/data_exploration.ipynb`.
+- [x] Added a configurable preview cell for exploring quarterback metrics without editing SQL each time.
