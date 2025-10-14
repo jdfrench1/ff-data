@@ -43,3 +43,7 @@
 ## Phase 11 - QB Metrics Notebook (Complete)
 - [x] Introduced season-level quarterback aggregation helpers to compute ADOT and rushing usage per game inside `notebooks/data_exploration.ipynb`.
 - [x] Added a configurable preview cell for exploring quarterback metrics without editing SQL each time.
+
+## Phase 12 - QB Defaults Tuning (Complete)
+- [x] Auto-detected available quarterback seasons to seed sensible defaults for the metrics query.
+- [x] Relaxed attempt/game thresholds and surfaced guidance to help users adjust filters when no rows return.
