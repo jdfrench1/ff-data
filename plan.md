@@ -1,49 +1,27 @@
-# Frontend Vue Migration Plan
+# Monorepo Operations Plan
 
-## Phase 1 - Planning & Tooling (Complete)
-- [x] Confirmed API requirements for player search, weekly stats timelines, and roster transitions to feed the Vue UI.
-- [x] Selected Vue 3 with Vite, ESLint (flat config), and Vue TSC as the foundation for the new frontend stack.
+## Phase 1 - Workspace Realignment (Complete)
+- [x] Consolidated backend, frontend, and analytics assets under `apps/`.
+- [x] Updated tooling (`sitecustomize.py`, `pytest.ini`, scripts) to respect the new layout.
+- [x] Refreshed root documentation (`README.md`, `todo.md`) so contributors land in the right project.
 
-## Phase 2 - Vue Scaffold (Complete)
-- [x] Replaced the React app with a Vue 3 + TypeScript project scaffolded via Vite and refreshed npm scripts.
-- [x] Configured linting, formatting, and build tooling with ESLint, vue-tsc, and bundler-aware TypeScript settings.
-- [x] Verified the production build pipeline via `npm run build` to ensure parity with previous automation hooks.
+## Phase 2 - Documentation Alignment (Complete)
+- [x] Replaced the root README with monorepo guidance and quick-start steps.
+- [x] Rewrote this plan to outline the remaining operational workstreams.
 
-## Phase 3 - Player Timeline Feature (Complete)
-- [x] Implemented FastAPI endpoints for player search and weekly timelines with derived team-change events.
-- [x] Built the Vue player selection experience, including sparkline trends, team change callouts, and weekly stat tables.
-- [x] Added pytest coverage for the new endpoints plus lint/build automation for the Vue app.
+## Phase 3 - Backfill & Weekly Pipeline Hardening (Complete)
+- [x] Centralized weekly ETL helpers under `nfldb.ops.weekly` and exposed `update-current`.
+- [x] Verified pytest coverage for both backfill and weekly loaders after the directory move.
+- [x] Documented command pathways for historical backfills and incremental loads.
 
-## Phase 4 - Player Search Diagnostics (Complete)
-- [x] Reviewed the `/api/v1/players` query and identified the Postgres failure caused by `COALESCE(g.kickoff_ts, '')`, which mixes timestamp and text types within the `ROW_NUMBER` sort.
-- [x] Confirmed the failure mode explains missing search results in the frontend due to the backend raising an error when hitting Postgres.
+## Phase 4 - Scheduled Execution Enablement (Complete)
+- [x] Added Windows Task Scheduler guidance that targets `python -m nfldb.cli update-current`.
+- [x] Confirmed log/output paths (`apps/backend/logs` and `raw/`) in documentation for automated jobs.
 
-## Phase 5 - Player Search Fix (Complete)
-- [x] Replaced the unsafe `COALESCE` usage with a cross-database safe ordering strategy for `ROW_NUMBER` so latest-team selection works on Postgres.
-- [x] Added regression coverage ensuring player searches succeed against fixture data without raising errors.
+## Phase 5 - Steady-State Operations (Complete)
+- [x] Produced an operational checklist in `apps/backend/README.md` for backfill and weekly refreshes.
+- [x] Documented monitoring hooks (log review, sanity snapshot CSV, Task Scheduler failure actions).
 
-## Phase 6 - Validation & Wrap-up (Complete)
-- [x] Ran `pytest -q` to verify regression coverage; all suites pass.
-- [x] Prepared to summarize backend fix, merge validation branch, and note deployment follow-ups.
+---
 
-## Phase 7 - API Redeploy (Complete)
-- [x] Relaunched the FastAPI service via `uvicorn`, verified the `/health` endpoint on port 8100, and confirmed new code is active.
-
-## Phase 8 - Frontend Smoke Test (Complete)
-- [x] Launched the API against a freshly seeded `smoke.db` SQLite snapshot and issued `fetch` calls mimicking the Vue client; verified player search and timeline payloads return successfully for \"Patrick\" queries.
-
-## Phase 9 - Timeline Customization (Complete)
-- [x] Introduced chart controls for scale mode, manual bounds, and overlay toggles to make the timeline visualization configurable.
-- [x] Enhanced the SVG timeline with axis labels, average line, season markers, and team-change indicators tied to weekly data.
-
-## Phase 10 - Data Exploration Notebook (Complete)
-- [x] Added `notebooks/data_exploration.ipynb` that authenticates with Postgres via SQLAlchemy for ad-hoc analysis.
-- [x] Provided helpers to list tables, preview rows, and execute custom SQL directly from the notebook.
-
-## Phase 11 - QB Metrics Notebook (Complete)
-- [x] Introduced season-level quarterback aggregation helpers to compute ADOT and rushing usage per game inside `notebooks/data_exploration.ipynb`.
-- [x] Added a configurable preview cell for exploring quarterback metrics without editing SQL each time.
-
-## Phase 12 - QB Defaults Tuning (Complete)
-- [x] Auto-detected available quarterback seasons to seed sensible defaults for the metrics query.
-- [x] Relaxed attempt/game thresholds and surfaced guidance to help users adjust filters when no rows return.
+_Historic notes for the Vue migration live in `apps/analytics/depreciated/plan-archive-legacy.md`._

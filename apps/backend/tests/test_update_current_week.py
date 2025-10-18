@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 import pandas as pd
 import pytest
 
-import scripts.update_current_week as updater
+import nfldb.ops.weekly as weekly
 
 
 def _stub_import_schedules(monkeypatch, frame: pd.DataFrame) -> None:
     def _fake_import_schedule(years):
         return frame
 
-    monkeypatch.setattr(updater.nfl, "import_schedules", _fake_import_schedule)
+    monkeypatch.setattr(weekly.nfl, "import_schedules", _fake_import_schedule)
 
 
 def test_resolve_target_week_regular_season(monkeypatch):
@@ -26,7 +26,7 @@ def test_resolve_target_week_regular_season(monkeypatch):
     )
     _stub_import_schedules(monkeypatch, schedule)
 
-    target = updater.resolve_target_week(
+    target = weekly.resolve_target_week(
         as_of=datetime(2024, 10, 8, 12, tzinfo=timezone.utc)
     )
 
@@ -46,7 +46,7 @@ def test_resolve_target_week_postseason(monkeypatch):
     )
     _stub_import_schedules(monkeypatch, schedule)
 
-    target = updater.resolve_target_week(
+    target = weekly.resolve_target_week(
         as_of=datetime(2025, 2, 10, tzinfo=timezone.utc)
     )
 
@@ -63,4 +63,4 @@ def test_resolve_target_week_no_games_yet(monkeypatch):
     _stub_import_schedules(monkeypatch, schedule)
 
     with pytest.raises(RuntimeError):
-        updater.resolve_target_week(as_of=datetime(2024, 8, 20, tzinfo=timezone.utc))
+        weekly.resolve_target_week(as_of=datetime(2024, 8, 20, tzinfo=timezone.utc))

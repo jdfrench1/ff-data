@@ -12,6 +12,7 @@ from .ops.sanity import (
     collect_row_counts,
     write_counts_snapshot,
 )
+from .ops.weekly import WeekTarget, parse_as_of, refresh_week, resolve_target_week
 
 app = typer.Typer(help="NFL database management CLI")
 
@@ -63,6 +64,54 @@ def update_week(
     load_games(season, season, target_weeks=[week], force_refresh=force_refresh)
     load_weekly_stats(season, season, target_weeks=[week], force_refresh=force_refresh)
     typer.echo(f"Week {week} of {season} refreshed.")
+
+
+@app.command("update-current")
+def update_current(
+    season: Optional[int] = typer.Option(None, help="Override the detected season."),
+    week: Optional[int] = typer.Option(None, help="Override the detected week."),
+    as_of: Optional[str] = typer.Option(
+        None, help="ISO timestamp for resolving the most recent completed week."
+    ),
+    force_refresh: bool = typer.Option(False, help="Redownload source data."),
+    dry_run: bool = typer.Option(False, help="Resolve the week without running ETL."),
+) -> None:
+    """Resolve the latest completed week and refresh it (unless --dry-run)."""
+    target: WeekTarget
+    try:
+        resolved_as_of = parse_as_of(as_of)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    if season is not None and week is not None:
+        target = WeekTarget(season=season, week=week)
+        typer.echo(f"Using provided season/week overrides: {season}/{week}.")
+    else:
+        target = resolve_target_week(as_of=resolved_as_of)
+        if season is not None and season != target.season:
+            typer.secho(
+                f"Resolved season {target.season} differs from override {season}. Using override.",
+                fg=typer.colors.YELLOW,
+            )
+            target = WeekTarget(season=season, week=target.week)
+        if week is not None and week != target.week:
+            typer.secho(
+                f"Resolved week {target.week} differs from override {week}. Using override.",
+                fg=typer.colors.YELLOW,
+            )
+            target = WeekTarget(season=target.season, week=week)
+        typer.echo(
+            f"Resolved latest completed week: season={target.season} week={target.week}"
+        )
+
+    if dry_run:
+        typer.echo("Dry-run enabled; skipping ETL execution.")
+        return
+
+    refresh_week(target, force_refresh=force_refresh)
+    typer.echo(
+        f"Season {target.season} week {target.week} refresh completed via update-current."
+    )
 
 
 @app.command("sanity-check")

@@ -1,145 +1,119 @@
-# NFL Database Runtime
+# Backend Services & ETL
 
-This backend project powers a Postgres-backed NFL analytics stack. Every entry point
-invokes a shared bootstrapper so scripts, schedulers, and ad-hoc shells all run
-inside the same Python environment with consistent configuration.
+This directory houses the Python backend for the `ff-data` monorepo. It contains
+the FastAPI application, database/ETL utilities, and supporting automation
+scripts. All commands below assume you are inside `apps/backend/`.
 
-The bootstrapper is split across two helpers:
+## Runtime Bootstrapper
 
-- `src/nfldb/runtime.py::bootstrap()` - core logic that re-executes inside
-  `.venv`, prepends `src/` to `sys.path`, and loads `.env` values.
-- `scripts/_bootstrap.py::activate()` - thin wrapper used by standalone
-  scripts (PowerShell or Python) to trigger the same behavior.
+- `src/nfldb/runtime.py::bootstrap()` re-executes the process inside `.venv`,
+  prepends `src/` to `sys.path`, and loads `.env` variables.
+- `scripts/_bootstrap.py::activate()` is a thin wrapper so PowerShell or other
+  entry-point scripts can trigger the same behavior.
+- `nfldb/__init__.py` and `sitecustomize.py` ensure `python -m nfldb.cli` works
+  even when the package is not installed into site-packages.
 
-Callers import one of these helpers before loading third-party packages or any
-module that depends on environment variables. Once the helper runs, code can
-assume:
+Import one of these helpers before touching third-party packages or code that
+expects environment variables.
 
-- The interpreter is `.venv\Scripts\python.exe` (Windows) or `.venv/bin/python`
-  (macOS/Linux).
-- `src/` is on `sys.path`, so `import nfldb.*` succeeds without `PYTHONPATH`
-  tweaks.
-- `.env` is parsed when present, exposing `DATABASE_URL` and related settings.
-- The guard variable `NFLDB_RUNTIME_ACTIVE` prevents infinite re-exec loops.
+## Environment Setup
 
----
+From `apps/backend/`:
 
-## Install Once, Bootstrap Everywhere
+1. `python -m venv .venv`
+2. Activate the environment:
+   - PowerShell: `.venv\Scripts\Activate.ps1`
+   - Bash/zsh: `source .venv/bin/activate`
+3. `pip install -r requirements.txt`
+4. (Optional) `pip install -r requirements-dev.txt`
+5. `copy .env.example .env` (use `cp` on macOS/Linux) and update connection
+   strings or API keys.
 
-1. **Create the project virtual environment**
-   ```bash
-   python -m venv .venv
-   ```
-2. **Install dependencies**
-   ```bash
-   .venv\Scripts\activate      # source .venv/bin/activate on macOS/Linux
-   pip install -r requirements.txt
-   pip install -r requirements-dev.txt
-   ```
-3. **Configure secrets**
-   ```bash
-   copy .env.example .env      # use cp on macOS/Linux
-   # edit DATABASE_URL and any task-specific overrides
-   ```
-4. **(Optional) Initialize Postgres**
-   ```bash
-   python -m nfldb.cli init-db
-   python -m nfldb.cli backfill --season-start 1999 --season-end 2023
-   ```
-
-After these steps you do *not* need to activate `.venv` before running scripts;
-the bootstrapper does it on demand.
-
----
+Once `.venv` exists, the bootstrapper will re-use it automatically, so you do
+not need to activate the environment for scheduled jobs or ad-hoc scripts.
 
 ## Running Project Tools
 
-| Use Case | Command | Bootstrap Notes |
-| -------- | ------- | --------------- |
-| Inspect CLI commands | `python -m nfldb.cli --help` | Direct module execution inside `.venv`. |
-| Full ETL backfill | `py -3 -m nfldb.cli backfill --season-start 2010 --season-end 2024` | Using `py` is safe; bootstrapper re-executes into `.venv`. |
-| Weekly database refresh | `py scripts/update_current_week.py --log-file logs/update.log` | `scripts/_bootstrap.py` runs first, so Task Scheduler and cron both work. |
-| CSV scrape only | `py ffscraper.py` | `ffscraper.py` calls `bootstrap()` before importing requests/pandas. |
-| PowerShell orchestration | `powershell.exe -File scripts/run-weekly.ps1 -Season 2024` | Script shells into Python with `_bootstrap.activate()` and inherits `.env`. |
-
-Prefer the `py` launcher (Windows) or system `python` command when wiring up
-schedulers; the bootstrapper will hop into `.venv` automatically. If you run
-inside `.venv` already, the helper becomes a no-op.
-
----
+| Use Case | Command (run from `apps/backend/`) | Notes |
+| -------- | ---------------------------------- | ----- |
+| Inspect CLI commands | `python -m nfldb.cli --help` | Runs inside `.venv` via the bootstrapper. |
+| Full ETL backfill | `py -3 -m nfldb.cli backfill --season-start 2010 --season-end 2024` | Safe to invoke with the Windows `py` launcher. |
+| Auto-detect latest week | `py -3 -m nfldb.cli update-current --log-level INFO --log-file logs/update.log` | Resolves the most recent completed week and runs the ETL (use `--dry-run` to inspect without loading). |
+| Manual weekly refresh | `py scripts/update_current_week.py --log-file logs/update.log` | Script form of the same workflow; accepts `--season/--week` overrides. |
+| Load a specific week | `py scripts/load_weekly_data.py --season 2024 --week 1` | Writes intermediary files into `raw/` (gitignored). |
+| Docker pipeline | `docker compose up --build scraper` | Uses `Dockerfile` and `docker-compose.yml` in this directory. |
 
 ## Automation Patterns
 
 - **Windows Task Scheduler**  
-  Point scheduled tasks at `py` or `powershell.exe`. Confirm `.venv` is created
-  ahead of time and the scheduled account can read `.env` plus write log files.
-
-- **Docker / Compose**  
-  Images install dependencies into `/app/.venv`; the bootstrapper sees that it is
-  already in the correct interpreter and simply loads `.env`.
-
-- **CI pipelines**  
-  Scripts called via `python`, `py`, or PowerShell behave the same locally and in
-  automation because each entry point imports the bootstrapper before doing work.
-
----
+  1. Create an action that runs `py` with arguments  
+     `-3 -m nfldb.cli update-current --log-level INFO --log-file logs\\update.log`.  
+  2. Set *Start in* to the full path of `apps/backend`.  
+  3. Ensure the service account has read access to `.env`, write access to `logs/`,
+     and permissions on any network locations referenced by `DATABASE_URL`.  
+  4. Use the *Triggers* tab to schedule the weekly run (e.g., every Tuesday at 06:00).
+- **Docker / Compose** - Images install dependencies into `/app/.venv`. The
+- **Docker / Compose** - Images install dependencies into `/app/.venv`. The
+  bootstrapper detects that interpreter and only loads `.env`.
+- **CI pipelines** - Callers that execute `python`, `py`, or PowerShell behave
+  identically because every entry point imports the bootstrapper first.
 
 ## Testing & Quality Gates
 
-- Run unit tests before pushing:
-  ```bash
-  pytest -q
-  ```
-- Tests mock HTTP calls and cached datasets; extend fixtures when selectors or
-  schema assumptions change.
-- Format touched Python files (especially `ffscraper.py`) with:
-  ```bash
-  python -m black ffscraper.py
-  ```
+- Run unit tests before pushing: `pytest -q`
+- Tests mock external services where needed; extend fixtures when parsing logic
+  changes.
+- Format touched modules with `python -m black src/nfldb`.
 
----
+## Operational Checklists
+
+- **Full backfill**
+  1. Optional sanity check: `python -m nfldb.cli sanity-check`.
+  2. Run `py -3 -m nfldb.cli backfill --season-start <first> --season-end <last>`.
+  3. Inspect logs and rerun the sanity check to confirm row counts.
+- **Weekly update**
+  1. Run `py -3 -m nfldb.cli update-current --log-level INFO --log-file logs/update.log`.
+  2. Review the log file for completion messages.
+  3. (Optional) Spot-check with `python -m nfldb.cli sanity-check`.
+
+## Monitoring & Alerting
+
+- **Log inspection** – Weekly runs append to `logs/update.log`. Configure Task Scheduler's
+  *History* view or your preferred log shipper to alert on `ERROR` entries.
+- **Sanity snapshot** – Schedule `python -m nfldb.cli sanity-check --output-csv logs\\row_counts.csv`
+  after the weekly refresh. Compare the latest CSV against previous snapshots to detect regressions.
+- **Exit codes** – `nfldb.cli update-current` returns a non-zero exit code on failure. Use Task
+  Scheduler's *Actions → On failure* trigger to send notifications or execute remediation scripts.
+- **Database health** – Review the CSV produced by `write_counts_snapshot` (see `nfldb.ops.sanity`)
+  alongside monitoring dashboards for your Postgres instance to ensure row counts grow as expected.
 
 ## Dependency Management
 
-- Install new libraries into `.venv`, then refresh the lockfile:
+- Install new libraries inside `.venv`, then capture the lockfile with:
   ```bash
-  pip install <package>==<version>
   pip freeze > requirements.txt
   ```
-- Capture development-only tooling in `requirements-dev.txt`.
-
----
+- Record development-only tooling in `requirements-dev.txt`.
 
 ## Project Layout
 
-- `ffscraper.py` - Pro-Football-Reference passer scrape that writes
-  `nfl_player_stats.csv`, bootstrapped before importing requests/pandas.
-- `src/nfldb/` - Application package housing the CLI, ETL modules, and
-  `runtime.py`.
-- `scripts/` - Automation helpers (`_bootstrap.py`, weekly updater, PowerShell
-  orchestrator) that import the bootstrapper first.
-- `raw/` - Cached CSV/Parquet sources (gitignored).
-- `tests/` - Pytest suites mirroring `src/`.
-- `../analytics/notebooks/` - Exploratory analysis kept outside production paths.
-- `docker-compose.yml`, `Dockerfile` - Container orchestration that respects
-  the same bootstrap logic.
-
----
+- `src/nfldb/` - Application package with API, ETL, and runtime helpers.
+- `scripts/` - Automation helpers that import `_bootstrap.activate()` first.
+- `tests/` - Pytest suites mirroring modules in `src/nfldb/`.
+- `migrations/` - Database schema change scripts.
+- `raw/` - Cached CSV/Parquet sources (ignored by git).
+- `logs/` - Scheduler and script output (ignored by git).
+- `nfldb/` - Import shim so `python -m nfldb.cli` resolves to `src/nfldb`.
+- `sitecustomize.py` - Adds this directory to `sys.path` when running from the
+  repository root.
 
 ## Troubleshooting
 
-- **Script still uses system Python**  
-  Verify `.venv` exists and contains `Scripts/python.exe` (Windows) or
-  `bin/python`. The bootstrapper skips re-exec if the interpreter is missing.
-
-- **Environment variables missing**  
-  Ensure `python-dotenv` is installed (bundled in `requirements.txt`) and `.env`
-  lives at the backend project root.
-
-- **Unexpected re-exec loops**  
-  The helper sets `NFLDB_RUNTIME_ACTIVE` after a successful hop. If tests mutate
-  `os.environ`, preserve that flag or call `bootstrap()` once at module import.
-
-With the bootstrapper in place, every workflow - from the CSV scrape to the
-weekly ETL - shares the same runtime contract and avoids the classic "works on
-my machine" surprises across local development, CI, and scheduled jobs.
+- **Script still uses system Python** - Confirm `.venv` exists and contains
+  `Scripts/python.exe` (Windows) or `bin/python`. If missing, create the
+  environment again and re-run the script.
+- **Environment variables missing** - Ensure `python-dotenv` (bundled in
+  `requirements.txt`) is installed and `.env` lives in this directory.
+- **Unexpected re-exec loops** - The bootstrapper sets `NFLDB_RUNTIME_ACTIVE`
+  after a successful hop into `.venv`. Preserve that flag if tests mutate
+  `os.environ`.
