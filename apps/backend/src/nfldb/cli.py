@@ -43,7 +43,12 @@ def backfill(
     """Backfill seasons, weeks, teams, games, and stats using nfl_data_py datasets."""
     load_seasons_and_weeks(season_start, season_end, force_refresh=force_refresh)
     load_games(season_start, season_end, force_refresh=force_refresh)
-    load_weekly_stats(season_start, season_end, force_refresh=force_refresh)
+    load_weekly_stats(
+        season_start,
+        season_end,
+        force_refresh=force_refresh,
+        stage_raw=True,
+    )
     typer.echo(f"Backfill complete for seasons {season_start}-{season_end}.")
 
 

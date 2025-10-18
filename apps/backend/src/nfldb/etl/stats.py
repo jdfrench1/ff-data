@@ -4,6 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
+import logging
+
 import io
 
 try:
@@ -18,7 +20,7 @@ except ImportError:  # pragma: no cover
 
 import pandas as pd
 import requests
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from ..db import get_engine
 from .common import cache_path
@@ -29,6 +31,20 @@ from .schedule import _load_schedule_df
 class WeeklyData:
     seasons: List[int]
     frame: pd.DataFrame
+
+
+logger = logging.getLogger(__name__)
+
+STAGING_TABLE = "nfl_weekly_stats"
+DEFAULT_CHUNK_SIZE = 1000
+MAX_QUERY_PARAMS = 65535
+
+_STAGING_COLUMN_RENAMES = {
+    "recent_team": "team",
+    "interceptions": "passing_interceptions",
+    "sacks": "sacks_suffered",
+    "sack_yards": "sack_yards_lost",
+}
 
 
 def _weekly_cache_path(season_start: int, season_end: int) -> Path:
@@ -140,6 +156,124 @@ def _load_weekly_df(
     combined = pd.concat(data_frames, ignore_index=True)
     combined.to_parquet(cache_file, index=False)
     return WeeklyData(seasons=seasons, frame=combined)
+
+
+def _normalize_weekly_columns(df: pd.DataFrame) -> pd.DataFrame:
+    normalized = df.copy()
+    normalized.columns = [
+        str(column).strip().replace(" ", "_").lower() for column in normalized.columns
+    ]
+    normalized = normalized.reset_index(drop=True)
+    return normalized
+
+
+def _resolve_chunk_size(column_count: int) -> int:
+    if column_count <= 0:
+        return DEFAULT_CHUNK_SIZE
+    max_rows = MAX_QUERY_PARAMS // max(1, column_count)
+    max_rows = max(1, max_rows)
+    return min(DEFAULT_CHUNK_SIZE, max_rows)
+
+
+def _delete_existing_rows(
+    conn,
+    seasons: Sequence[int],
+    weeks: Optional[Sequence[int]],
+) -> None:
+    if not seasons:
+        return
+    if weeks:
+        delete_stmt = text(
+            "DELETE FROM nfl_weekly_stats WHERE season = :season AND week = :week"
+        )
+        for season in seasons:
+            for week in weeks:
+                conn.execute(delete_stmt, {"season": int(season), "week": int(week)})
+    else:
+        delete_stmt = text("DELETE FROM nfl_weekly_stats WHERE season = :season")
+        for season in seasons:
+            conn.execute(delete_stmt, {"season": int(season)})
+
+
+def _stage_weekly_stats(
+    df: pd.DataFrame,
+    *,
+    target_weeks: Optional[Sequence[int]] = None,
+) -> None:
+    if df.empty:
+        logger.info("Weekly stats frame is empty; skipping staging upload.")
+        return
+
+    if "season" not in df.columns:
+        logger.warning(
+            "Weekly stats frame missing 'season' column; skipping staging upload."
+        )
+        return
+
+    normalized = _normalize_weekly_columns(df)
+
+    if "team" in normalized.columns and "recent_team" in normalized.columns:
+        normalized = normalized.drop(columns=["team"])
+
+    rename_map = {
+        source: target
+        for source, target in _STAGING_COLUMN_RENAMES.items()
+        if source in normalized.columns and target not in normalized.columns
+    }
+    if rename_map:
+        normalized = normalized.rename(columns=rename_map)
+    seasons = sorted(
+        {
+            int(season)
+            for season in normalized["season"].dropna().unique().tolist()  # type: ignore[arg-type]
+        }
+    )
+
+    week_filter: Optional[List[int]] = None
+    if target_weeks is not None:
+        week_filter = sorted({int(week) for week in target_weeks})
+        if "week" not in normalized.columns:
+            logger.warning(
+                "Weekly stats frame missing 'week' column; cannot apply week filter."
+            )
+            week_filter = None
+
+    engine = get_engine()
+    try:
+        with engine.begin() as conn:
+            staging_columns: Optional[List[str]] = None
+            inspector = inspect(engine)
+            if inspector.has_table(STAGING_TABLE):
+                staging_columns = [
+                    column["name"] for column in inspector.get_columns(STAGING_TABLE)
+                ]
+            if staging_columns:
+                extra_columns = [
+                    column for column in normalized.columns if column not in staging_columns
+                ]
+                if extra_columns:
+                    logger.debug(
+                        "Dropping columns not present in %s: %s",
+                        STAGING_TABLE,
+                        ", ".join(sorted(extra_columns)),
+                    )
+                normalized = normalized[
+                    [column for column in staging_columns if column in normalized.columns]
+                ]
+
+            _delete_existing_rows(conn, seasons, week_filter)
+            chunk_size = _resolve_chunk_size(len(normalized.columns))
+            normalized.to_sql(
+                STAGING_TABLE,
+                conn,
+                if_exists="append",
+                index=False,
+                chunksize=chunk_size,
+                method="multi",
+            )
+    except Exception:
+        logger.exception("Failed to stage weekly stats into %s", STAGING_TABLE)
+        raise
 
 
 def _prepare_schedule_lookup(schedule_df: pd.DataFrame) -> pd.DataFrame:
@@ -457,11 +591,15 @@ def load_weekly_stats(
     *,
     target_weeks: Optional[Sequence[int]] = None,
     force_refresh: bool = False,
+    stage_raw: bool = False,
 ) -> None:
     schedule = _load_schedule_df(season_start, season_end, force_refresh=force_refresh)
     schedule_lookup = _prepare_schedule_lookup(schedule.frame)
     weekly = _load_weekly_df(season_start, season_end, force_refresh=force_refresh)
     weekly_df = _clean_weekly_frame(weekly.frame, target_weeks=target_weeks)
+
+    if stage_raw:
+        _stage_weekly_stats(weekly_df, target_weeks=target_weeks)
 
     _upsert_players(weekly_df)
     team_stats = _aggregate_team_stats(weekly_df)

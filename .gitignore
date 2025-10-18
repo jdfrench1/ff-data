@@ -1,12 +1,20 @@
 /.venv
 __pycache__/
-raw/
 .env
 *.pyc
-logs/
 /actions-runner
 /.actions-runner
 
 /.pytest_cache/
 nfl_weekly_stats.csv
+
+# Backend app artifacts
+/apps/backend/.venv/
+/apps/backend/.env
+/apps/backend/logs/
+/apps/backend/raw/
+
+# Frontend build output
+/apps/frontend/node_modules/
+/apps/frontend/dist/
 
