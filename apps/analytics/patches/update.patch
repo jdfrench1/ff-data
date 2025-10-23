@@ -1,0 +1,762 @@
+diff --git a/apps/backend/src/nfldb/cli.py b/apps/backend/src/nfldb/cli.py
+index fe619e80b8a73cfd04c3d355e4963713334ec4ee..8503a0a1b08f4c8afa5866185fce8ecf84ac69c3 100644
+--- a/apps/backend/src/nfldb/cli.py
++++ b/apps/backend/src/nfldb/cli.py
+@@ -1,34 +1,39 @@
+ from pathlib import Path
+-from typing import Optional
++from typing import List, Optional
+ 
+ import typer
+ from sqlalchemy import text
+ 
+ from .db import get_engine, session_scope
+ from .etl.schedule import load_seasons_and_weeks, load_games
+ from .etl.stats import load_weekly_stats
++from .ops.relationships import (
++    WeekNotFoundError,
++    format_week_span,
++    get_quarterback_team_coach_relationships,
++)
+ from .ops.sanity import (
+     build_data_health_summary,
+     collect_row_counts,
+     write_counts_snapshot,
+ )
+ from .ops.weekly import WeekTarget, parse_as_of, refresh_week, resolve_target_week
+ 
+ app = typer.Typer(help="NFL database management CLI")
+ 
+ 
+ def _default_schema_path() -> Path:
+     return Path(__file__).resolve().parent / "schema.sql"
+ 
+ 
+ @app.command("init-db")
+ def init_db(
+     schema_path: Optional[Path] = typer.Option(None, help="Path to schema.sql")
+ ) -> None:
+     """Apply the SQL schema to the configured Postgres database."""
+     target_path = schema_path or _default_schema_path()
+     sql = target_path.read_text(encoding="utf-8")
+     engine = get_engine()
+     with engine.begin() as conn:
+         for statement in filter(None, (chunk.strip() for chunk in sql.split(";"))):
+             conn.execute(text(statement))
+@@ -132,27 +137,82 @@ def sanity_check(
+ 
+     typer.echo(f"Latest season: {summary.latest_season}")
+     typer.echo(f"Weeks tracked: {len(summary.week_summaries)}")
+     if summary.latest_completed_week is not None:
+         typer.echo(f"Latest week with completed games: {summary.latest_completed_week}")
+     else:
+         typer.echo("No completed games recorded yet.")
+ 
+     typer.echo(
+         "Games (total/completed): "
+         f"{summary.total_games}/{summary.total_completed_games}"
+     )
+ 
+     if summary.issues:
+         typer.secho("Issues detected:", fg=typer.colors.YELLOW)
+         for issue in summary.issues:
+             typer.echo(f"- {issue}")
+     else:
+         typer.echo("No issues detected.")
+ 
+     if output_csv and counts is not None:
+         snapshot_path = write_counts_snapshot(output_csv, counts)
+         typer.echo(f"Row-count snapshot written to {snapshot_path}")
+ 
+ 
++@app.command("qb-relationships")
++def qb_relationships(
++    season: int = typer.Option(..., min=1999, help="Season to inspect."),
++    week: int = typer.Option(..., min=1, max=22, help="Week to inspect."),
++    coach_role: List[str] = typer.Option(
++        [],
++        "--coach-role",
++        "-r",
++        help="Optional coach role filter; repeat the option to include multiple roles.",
++    ),
++) -> None:
++    """Display quarterbacks, their teams, and active coaches for a given week."""
++
++    with session_scope() as session:
++        try:
++            records = get_quarterback_team_coach_relationships(
++                session,
++                season=season,
++                week=week,
++                coach_roles=coach_role or None,
++            )
++        except WeekNotFoundError as exc:
++            raise typer.BadParameter(str(exc)) from exc
++
++    typer.echo(f"Season {season} week {week} quarterback/coach relationships:")
++    if not records:
++        typer.echo("No active quarterback and coach relationships found.")
++        return
++
++    header = (
++        f"{'Quarterback':25} | {'Team':25} | {'Coach':25} | "
++        f"{'Role':20} | {'QB Weeks':9} | {'Coach Weeks':11}"
++    )
++    typer.echo(header)
++    typer.echo("-" * len(header))
++
++    for record in records:
++        team_label = record.team_code
++        if record.team_name:
++            team_label = f"{record.team_code} ({record.team_name})"
++        qb_span = format_week_span(
++            record.quarterback_start_week,
++            record.quarterback_end_week,
++        )
++        coach_span = format_week_span(
++            record.coach_start_week,
++            record.coach_end_week,
++        )
++        typer.echo(
++            f"{record.quarterback_name:25} | {team_label:25} | "
++            f"{record.coach_name:25} | {record.coach_role:20} | "
++            f"{qb_span:9} | {coach_span:11}"
++        )
++
++
+ if __name__ == "__main__":
+     app()
+diff --git a/apps/backend/src/nfldb/ops/__init__.py b/apps/backend/src/nfldb/ops/__init__.py
+index d1ebab9fff76ab553f1dfc5925e2f3080a5a5123..de89fde10fc0dad432b93d930c24e84eea4f75dc 100644
+--- a/apps/backend/src/nfldb/ops/__init__.py
++++ b/apps/backend/src/nfldb/ops/__init__.py
+@@ -1,22 +1,32 @@
+ """Operations tooling for on-call workflows."""
+ 
++from .relationships import (
++    QuarterbackCoachRecord,
++    WeekNotFoundError,
++    format_week_span,
++    get_quarterback_team_coach_relationships,
++)
+ from .sanity import (
+     DataHealthSummary,
+     WeekSummary,
+     build_data_health_summary,
+     collect_row_counts,
+     write_counts_snapshot,
+ )
+ from .weekly import WeekTarget, refresh_week, resolve_target_week
+ 
+ __all__ = [
+     "DataHealthSummary",
++    "QuarterbackCoachRecord",
++    "WeekNotFoundError",
+     "WeekSummary",
+     "WeekTarget",
++    "format_week_span",
+     "build_data_health_summary",
+     "collect_row_counts",
++    "get_quarterback_team_coach_relationships",
+     "refresh_week",
+     "resolve_target_week",
+     "write_counts_snapshot",
+ ]
+ 
+diff --git a/apps/backend/src/nfldb/ops/relationships.py b/apps/backend/src/nfldb/ops/relationships.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..13e0ac8cbea1e80acfd672488d76678a67d7121f
+--- /dev/null
++++ b/apps/backend/src/nfldb/ops/relationships.py
+@@ -0,0 +1,149 @@
++"""Query helpers for linking quarterbacks, teams, and coaches."""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++from typing import List, Optional, Sequence, Tuple
++
++from sqlalchemy import bindparam, text
++from sqlalchemy.orm import Session
++
++
++class WeekNotFoundError(ValueError):
++    """Raised when the requested season/week combination does not exist."""
++
++
++@dataclass(frozen=True)
++class QuarterbackCoachRecord:
++    """Representation of an active quarterback/coach relationship for a week."""
++
++    quarterback_id: int
++    quarterback_name: str
++    team_code: str
++    team_name: Optional[str]
++    coach_id: int
++    coach_name: str
++    coach_role: str
++    season: int
++    week: int
++    quarterback_start_week: Optional[int]
++    quarterback_end_week: Optional[int]
++    coach_start_week: Optional[int]
++    coach_end_week: Optional[int]
++
++
++def _normalize_role_filter(coach_roles: Optional[Sequence[str]]) -> Tuple[str, ...]:
++    if not coach_roles:
++        return ()
++    return tuple(role.strip().casefold() for role in coach_roles if role.strip())
++
++
++def get_quarterback_team_coach_relationships(
++    session: Session,
++    *,
++    season: int,
++    week: int,
++    coach_roles: Optional[Sequence[str]] = None,
++) -> List[QuarterbackCoachRecord]:
++    """Return quarterback/team/coach relationships active for the given week."""
++
++    week_row = (
++        session.execute(
++            text(
++                """
++            SELECT w.week_id, w.week_number, w.season_id, s.year AS season_year
++            FROM weeks w
++            JOIN seasons s ON w.season_id = s.season_id
++            WHERE s.year = :season AND w.week_number = :week
++            """
++            ),
++            {"season": season, "week": week},
++        )
++        .mappings()
++        .one_or_none()
++    )
++
++    if week_row is None:
++        raise WeekNotFoundError(f"No week found for season {season} and week {week}.")
++
++    params = {
++        "week_id": week_row["week_id"],
++        "season_id": week_row["season_id"],
++        "season": season,
++        "week": week,
++    }
++
++    role_filter = _normalize_role_filter(coach_roles)
++
++    query = """
++            SELECT
++                p.player_id AS quarterback_id,
++                p.full_name AS quarterback_name,
++                t.team_code,
++                t.team_name,
++                c.coach_id,
++                c.full_name AS coach_name,
++                cr.role AS coach_role,
++                :season AS season,
++                :week AS week,
++                CASE
++                    WHEN ra_start.season_id = :season_id THEN ra_start.week_number
++                    ELSE NULL
++                END AS quarterback_start_week,
++                CASE
++                    WHEN ra_end.week_id IS NOT NULL AND ra_end.season_id = :season_id
++                    THEN ra_end.week_number
++                    ELSE NULL
++                END AS quarterback_end_week,
++                CASE
++                    WHEN cr_start.season_id = :season_id THEN cr_start.week_number
++                    ELSE NULL
++                END AS coach_start_week,
++                CASE
++                    WHEN cr_end.week_id IS NOT NULL AND cr_end.season_id = :season_id
++                    THEN cr_end.week_number
++                    ELSE NULL
++                END AS coach_end_week
++            FROM players p
++            JOIN roster_assignments ra ON ra.player_id = p.player_id
++            JOIN teams t ON t.team_id = ra.team_id
++            JOIN weeks ra_start ON ra_start.week_id = ra.start_week_id
++            LEFT JOIN weeks ra_end ON ra_end.week_id = ra.end_week_id
++            JOIN coach_roles cr ON cr.team_id = t.team_id
++            JOIN coaches c ON c.coach_id = cr.coach_id
++            JOIN weeks cr_start ON cr_start.week_id = cr.start_week_id
++            LEFT JOIN weeks cr_end ON cr_end.week_id = cr.end_week_id
++            WHERE p.position = 'QB'
++              AND ra.start_week_id <= :week_id
++              AND (ra.end_week_id IS NULL OR ra.end_week_id >= :week_id)
++              AND cr.start_week_id <= :week_id
++              AND (cr.end_week_id IS NULL OR cr.end_week_id >= :week_id)
++    """
++
++    if role_filter:
++        query += "\n              AND lower(cr.role) IN :coach_roles"
++
++    query += "\n            ORDER BY t.team_code, p.full_name, c.full_name\n            "
++
++    statement = text(query)
++    if role_filter:
++        statement = statement.bindparams(bindparam("coach_roles", expanding=True))
++        params["coach_roles"] = role_filter
++
++    rows = session.execute(statement, params).mappings()
++
++    return [QuarterbackCoachRecord(**row) for row in rows]
++
++
++def format_week_span(start: Optional[int], end: Optional[int]) -> str:
++    """Render a week span for display in CLI responses."""
++
++    if start is None and end is None:
++        return "—"
++    if start is None:
++        return f"≤{end}"
++    if end is None:
++        return f"{start}+"
++    if start == end:
++        return f"{start}"
++    return f"{start}-{end}"
+diff --git a/apps/backend/tests/__init__.py b/apps/backend/tests/__init__.py
+index 8b137891791fe96927ad78e64b0aad7bded08bdc..b2585fa9db4709c29f578c6f8ee0b7ab9aa0b7a0 100644
+--- a/apps/backend/tests/__init__.py
++++ b/apps/backend/tests/__init__.py
+@@ -1 +1 @@
+-
++"""Backend test package."""
+diff --git a/apps/backend/tests/_constants.py b/apps/backend/tests/_constants.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..bf57b2ef5c8cb7fb0b0fc33fb284e0b2923e47c0
+--- /dev/null
++++ b/apps/backend/tests/_constants.py
+@@ -0,0 +1,9 @@
++"""Shared constants for backend test fixtures."""
++
++from __future__ import annotations
++
++SEASON = 2023
++START_WEEK = 1
++HOME_TEAM = "KAN"
++AWAY_TEAM = "DET"
++GAME_KEY = "2023_01_KAN_DET"
+diff --git a/apps/backend/tests/conftest.py b/apps/backend/tests/conftest.py
+index 6abc54e9d6b8bae5ec5c0e3bb4c1e98377cd6dec..892fee1364e586ab2da41f732543a319502e45d0 100644
+--- a/apps/backend/tests/conftest.py
++++ b/apps/backend/tests/conftest.py
+@@ -1,48 +1,47 @@
+ from __future__ import annotations
+ 
+ import os
+ from pathlib import Path
+ from typing import Callable
+ 
+ ScheduleWriter = Callable[[int, int], Path]
+ TeamMetaWriter = Callable[[], Path]
+ WeeklyWriter = Callable[[], Path]
+ 
+ import pandas as pd
+ import pytest
+-from fastapi.testclient import TestClient
++
++os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
++
+ from nfldb.api.main import app
+ from nfldb.db import configure_engine, get_engine
+ import nfldb.etl.common as common
+ import nfldb.etl.schedule as schedule
+ 
+-SEASON = 2023
+-START_WEEK = 1
+-HOME_TEAM = "KAN"
+-AWAY_TEAM = "DET"
+-GAME_KEY = "2023_01_KAN_DET"
++from ._constants import AWAY_TEAM, GAME_KEY, HOME_TEAM, SEASON, START_WEEK
++from .fixtures.relationships import quarterback_coach_sample  # noqa: F401
+ 
+ 
+ def _create_schema() -> None:
+     engine = get_engine()
+     with engine.begin() as conn:
+         conn.exec_driver_sql("PRAGMA foreign_keys = ON")
+         conn.exec_driver_sql(
+             """
+             CREATE TABLE seasons (
+                 season_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 year INTEGER NOT NULL UNIQUE
+             )
+             """
+         )
+         conn.exec_driver_sql(
+             """
+             CREATE TABLE teams (
+                 team_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 team_code TEXT NOT NULL UNIQUE,
+                 team_name TEXT,
+                 conference TEXT,
+                 division TEXT
+             )
+             """
+         )
+@@ -365,40 +364,43 @@ def write_weekly(raw_dir: Path) -> WeeklyWriter:
+ 
+     return _writer
+ 
+ 
+ @pytest.fixture()
+ def write_weekly_alt_schema(
+     raw_dir: Path, write_weekly: WeeklyWriter
+ ) -> WeeklyWriter:
+     def _writer() -> Path:
+         path = write_weekly()
+         df = pd.read_parquet(path)
+         qb_mask = df["position_group"] == "QB"
+         df["team"] = df["recent_team"]
+         df["passing_interceptions"] = df["interceptions"]
+         df["sacks_suffered"] = df["sacks"].where(qb_mask, 0).fillna(0)
+         df["def_sacks"] = df["sacks"].where(~qb_mask, 0).fillna(0)
+         df = df.drop(columns=["recent_team", "interceptions", "sacks"])
+         df.to_parquet(path, index=False)
+         return path
+ 
+     return _writer
+ 
+ 
+ @pytest.fixture()
+ def client(database):
+-    return TestClient(app)
++    pytest.importorskip("httpx")
++    from fastapi.testclient import TestClient as FastAPITestClient
++
++    return FastAPITestClient(app)
+ 
+ 
+ @pytest.fixture()
+ def run_full_pipeline(
+     database, write_schedule: ScheduleWriter, write_weekly: WeeklyWriter
+ ):
+     write_schedule()
+     write_weekly()
+     from nfldb.etl.schedule import load_games, load_seasons_and_weeks
+     from nfldb.etl.stats import load_weekly_stats
+ 
+     load_seasons_and_weeks(SEASON, SEASON)
+     load_games(SEASON, SEASON)
+     load_weekly_stats(SEASON, SEASON)
+diff --git a/apps/backend/tests/fixtures/__init__.py b/apps/backend/tests/fixtures/__init__.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b5ae3bea5223694795110f19466b2a6b6b27b0f
+--- /dev/null
++++ b/apps/backend/tests/fixtures/__init__.py
+@@ -0,0 +1,5 @@
++"""Pytest plugin registry for backend test fixtures."""
++
++pytest_plugins = [
++    "apps.backend.tests.fixtures.relationships",
++]
+diff --git a/apps/backend/tests/fixtures/relationships.py b/apps/backend/tests/fixtures/relationships.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b100b1793d50495f9e4e4d3790fc7363f29a3f0f
+--- /dev/null
++++ b/apps/backend/tests/fixtures/relationships.py
+@@ -0,0 +1,201 @@
++"""Fixtures for quarterback/coach relationship integration tests."""
++
++from __future__ import annotations
++
++from typing import Dict
++
++import pytest
++from sqlalchemy import text
++
++from nfldb.db import get_engine, session_scope
++
++from .._constants import HOME_TEAM, SEASON, START_WEEK
++
++
++def _ensure_relationship_tables() -> None:
++    engine = get_engine()
++    statements = [
++        """
++        CREATE TABLE IF NOT EXISTS coaches (
++            coach_id INTEGER PRIMARY KEY AUTOINCREMENT,
++            full_name TEXT NOT NULL,
++            birthdate TEXT
++        )
++        """,
++        """
++        CREATE TABLE IF NOT EXISTS roster_assignments (
++            assignment_id INTEGER PRIMARY KEY AUTOINCREMENT,
++            player_id INTEGER NOT NULL REFERENCES players(player_id) ON DELETE RESTRICT,
++            team_id INTEGER NOT NULL REFERENCES teams(team_id) ON DELETE RESTRICT,
++            start_week_id INTEGER NOT NULL REFERENCES weeks(week_id) ON DELETE RESTRICT,
++            end_week_id INTEGER REFERENCES weeks(week_id) ON DELETE RESTRICT,
++            jersey_number INTEGER,
++            position_group TEXT,
++            UNIQUE (player_id, team_id, start_week_id)
++        )
++        """,
++        """
++        CREATE TABLE IF NOT EXISTS coach_roles (
++            coach_role_id INTEGER PRIMARY KEY AUTOINCREMENT,
++            coach_id INTEGER NOT NULL REFERENCES coaches(coach_id) ON DELETE RESTRICT,
++            team_id INTEGER NOT NULL REFERENCES teams(team_id) ON DELETE RESTRICT,
++            role TEXT NOT NULL,
++            start_week_id INTEGER NOT NULL REFERENCES weeks(week_id) ON DELETE RESTRICT,
++            end_week_id INTEGER REFERENCES weeks(week_id) ON DELETE RESTRICT
++        )
++        """,
++    ]
++
++    with engine.begin() as conn:
++        for statement in statements:
++            conn.exec_driver_sql(statement)
++
++
++@pytest.fixture()
++def quarterback_coach_sample(database) -> Dict[str, str]:
++    """Seed the database with a sample quarterback and two active coaches."""
++
++    _ensure_relationship_tables()
++
++    qb_name = "Sample Quarterback"
++    head_coach = "Coach One"
++    coordinator = "Coach Two"
++
++    with session_scope() as session:
++        session.execute(
++            text("INSERT OR IGNORE INTO seasons (year) VALUES (:year)"),
++            {"year": SEASON},
++        )
++        season_id = session.execute(
++            text("SELECT season_id FROM seasons WHERE year = :year"),
++            {"year": SEASON},
++        ).scalar_one()
++
++        for offset, start, end in (
++            (0, "2023-09-04", "2023-09-10"),
++            (1, "2023-09-11", "2023-09-17"),
++        ):
++            week_number = START_WEEK + offset
++            session.execute(
++                text(
++                    """
++                    INSERT OR IGNORE INTO weeks (
++                        season_id, week_number, start_date, end_date
++                    )
++                    VALUES (:season_id, :week_number, :start_date, :end_date)
++                    """
++                ),
++                {
++                    "season_id": season_id,
++                    "week_number": week_number,
++                    "start_date": start,
++                    "end_date": end,
++                },
++            )
++
++        week_ids = dict(
++            session.execute(
++                text(
++                    """
++                    SELECT week_number, week_id
++                    FROM weeks
++                    WHERE season_id = :season_id AND week_number IN (:start_week, :next_week)
++                    """
++                ),
++                {
++                    "season_id": season_id,
++                    "start_week": START_WEEK,
++                    "next_week": START_WEEK + 1,
++                },
++            ).all()
++        )
++
++        session.execute(
++            text(
++                """
++                INSERT OR IGNORE INTO teams (
++                    team_code, team_name, conference, division
++                )
++                VALUES (:code, :name, 'AFC', 'West')
++                """
++            ),
++            {"code": HOME_TEAM, "name": "Kansas City Chiefs"},
++        )
++        team_id = session.execute(
++            text(
++                "SELECT team_id FROM teams WHERE team_code = :team_code"
++            ),
++            {"team_code": HOME_TEAM},
++        ).scalar_one()
++
++        session.execute(
++            text(
++                """
++                INSERT OR IGNORE INTO players (gsis_id, full_name, position)
++                VALUES (:gsis_id, :name, 'QB')
++                """
++            ),
++            {"gsis_id": "QB_SAMPLE", "name": qb_name},
++        )
++        player_id = session.execute(
++            text(
++                "SELECT player_id FROM players WHERE gsis_id = :gsis_id"
++            ),
++            {"gsis_id": "QB_SAMPLE"},
++        ).scalar_one()
++
++        session.execute(
++            text(
++                """
++                INSERT OR IGNORE INTO roster_assignments (
++                    player_id, team_id, start_week_id, end_week_id, jersey_number, position_group
++                )
++                VALUES (:player_id, :team_id, :start_week_id, NULL, 15, 'QB')
++                """
++            ),
++            {
++                "player_id": player_id,
++                "team_id": team_id,
++                "start_week_id": week_ids[START_WEEK],
++            },
++        )
++
++        for coach_name, role, end_week in (
++            (head_coach, "Head Coach", None),
++            (coordinator, "Offensive Coordinator", START_WEEK + 1),
++        ):
++            session.execute(
++                text("INSERT OR IGNORE INTO coaches (full_name) VALUES (:name)"),
++                {"name": coach_name},
++            )
++            coach_id = session.execute(
++                text(
++                    "SELECT coach_id FROM coaches WHERE full_name = :name"
++                ),
++                {"name": coach_name},
++            ).scalar_one()
++
++            session.execute(
++                text(
++                    """
++                    INSERT OR IGNORE INTO coach_roles (
++                        coach_id, team_id, role, start_week_id, end_week_id
++                    )
++                    VALUES (:coach_id, :team_id, :role, :start_week_id, :end_week_id)
++                    """
++                ),
++                {
++                    "coach_id": coach_id,
++                    "team_id": team_id,
++                    "role": role,
++                    "start_week_id": week_ids[START_WEEK],
++                    "end_week_id": week_ids.get(end_week) if end_week else None,
++                },
++            )
++
++    return {
++        "quarterback_name": qb_name,
++        "head_coach": head_coach,
++        "coordinator": coordinator,
++        "team_code": HOME_TEAM,
++    }
+diff --git a/apps/backend/tests/test_cli.py b/apps/backend/tests/test_cli.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..83c96e7654b4ff2902644593271e0b4320dbfc5e
+--- /dev/null
++++ b/apps/backend/tests/test_cli.py
+@@ -0,0 +1,30 @@
++from __future__ import annotations
++
++from typer.testing import CliRunner
++
++from nfldb.cli import app
++
++from ._constants import SEASON, START_WEEK
++
++
++def test_qb_relationships_command_outputs_table(
++    database, quarterback_coach_sample
++) -> None:
++    runner = CliRunner()
++
++    result = runner.invoke(
++        app,
++        [
++            "qb-relationships",
++            "--season",
++            str(SEASON),
++            "--week",
++            str(START_WEEK),
++        ],
++    )
++
++    assert result.exit_code == 0
++    assert quarterback_coach_sample["quarterback_name"] in result.stdout
++    assert quarterback_coach_sample["head_coach"] in result.stdout
++    assert quarterback_coach_sample["coordinator"] in result.stdout
++    assert quarterback_coach_sample["team_code"] in result.stdout
+diff --git a/apps/backend/tests/test_relationships.py b/apps/backend/tests/test_relationships.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b2f5b76dbadec14bb09bf71d1a88d3f8e664d04e
+--- /dev/null
++++ b/apps/backend/tests/test_relationships.py
+@@ -0,0 +1,57 @@
++from __future__ import annotations
++
++import pytest
++
++from nfldb.db import session_scope
++from nfldb.ops.relationships import (
++    WeekNotFoundError,
++    format_week_span,
++    get_quarterback_team_coach_relationships,
++)
++
++from ._constants import HOME_TEAM, SEASON, START_WEEK
++
++
++def test_get_relationships_returns_active_coaches(
++    database, quarterback_coach_sample
++) -> None:
++    with session_scope() as session:
++        records = get_quarterback_team_coach_relationships(
++            session, season=SEASON, week=START_WEEK
++        )
++
++    assert len(records) == 2
++    head_coach = next(record for record in records if record.coach_role == "Head Coach")
++    assert head_coach.quarterback_name == quarterback_coach_sample["quarterback_name"]
++    assert head_coach.team_code == HOME_TEAM
++    assert head_coach.coach_name == quarterback_coach_sample["head_coach"]
++    assert head_coach.quarterback_start_week == START_WEEK
++    assert head_coach.quarterback_end_week is None
++    assert head_coach.coach_start_week == START_WEEK
++
++
++def test_relationships_role_filter(database, quarterback_coach_sample) -> None:
++    with session_scope() as session:
++        records = get_quarterback_team_coach_relationships(
++            session,
++            season=SEASON,
++            week=START_WEEK,
++            coach_roles=[" head coach "],
++        )
++
++    assert len(records) == 1
++    assert records[0].coach_role == "Head Coach"
++
++
++def test_relationships_missing_week(database) -> None:
++    with session_scope() as session:
++        with pytest.raises(WeekNotFoundError):
++            get_quarterback_team_coach_relationships(session, season=1999, week=1)
++
++
++def test_format_week_span_variants() -> None:
++    assert format_week_span(None, None) == "—"
++    assert format_week_span(1, None) == "1+"
++    assert format_week_span(None, 3) == "≤3"
++    assert format_week_span(2, 2) == "2"
++    assert format_week_span(1, 3) == "1-3"
